@@ -1,0 +1,26 @@
+# Normalise line endings so the repository is identical across Windows, macOS,
+# Linux and CI. Without this, a Windows checkout commits CRLF and every diff
+# from a Linux runner looks like a whole-file rewrite.
+* text=auto eol=lf
+
+# Shell scripts must be LF or they will not execute inside containers.
+*.sh        text eol=lf
+*.bash      text eol=lf
+
+# PowerShell scripts are Windows-side tooling; CRLF is correct there.
+*.ps1       text eol=crlf
+*.psm1      text eol=crlf
+
+# Binary - never diff or normalise.
+*.png       binary
+*.jpg       binary
+*.gif       binary
+*.ico       binary
+*.pdf       binary
+*.pkl       binary
+*.joblib    binary
+*.onnx      binary
+*.parquet   binary
+
+# Generated - collapse in diffs and mark as not-authored for language stats.
+pnpm-lock.yaml  linguist-generated=true -diff
