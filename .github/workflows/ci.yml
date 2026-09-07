@@ -1,0 +1,231 @@
+name: CI
+
+# Runs on every PR and on pushes to the long-lived branches.
+# Required checks must pass before merge — a red build blocks, it does not warn.
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+  PNPM_VERSION: '9'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Fast feedback: everything that needs no infrastructure.
+  # Fails within ~2 minutes so a broken PR does not occupy a runner with
+  # containers for ten.
+  # ---------------------------------------------------------------------------
+  quality:
+    name: Lint, typecheck, unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # packages/domain is I/O-free (ADR-004), so the unit suite needs nothing
+      # running. If this step ever requires a service, an architectural rule
+      # has been broken.
+      - name: Unit tests
+        run: pnpm test:unit
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit
+          path: coverage/
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Enforces the ADR-003 hot-path rules mechanically.
+  # A documented convention that is not checked is a convention that decays.
+  # ---------------------------------------------------------------------------
+  architecture:
+    name: Architecture rules (ADR-003)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: quality
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Asserts: no synchronous PostgreSQL read and no Kafka consumer reachable
+      # from the fraud-api scoring path; packages/domain imports no I/O.
+      - name: Hot-path import rules
+        run: pnpm test:architecture
+
+  # ---------------------------------------------------------------------------
+  # Integration against real infrastructure. Mocks cannot catch a wrong SQL
+  # dialect, a Redis type error, or a Kafka serialisation mismatch.
+  # ---------------------------------------------------------------------------
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: quality
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: fraudguard_test
+          POSTGRES_USER: fraudguard
+          POSTGRES_PASSWORD: test_only_not_a_secret
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U fraudguard"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations
+        run: pnpm db:migrate
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_DB: fraudguard_test
+          POSTGRES_USER: fraudguard
+          POSTGRES_PASSWORD: test_only_not_a_secret
+
+      # Kafka-dependent tests use Testcontainers rather than a service
+      # container, so they control broker lifecycle for outage scenarios.
+      - name: Integration tests
+        run: pnpm test:integration
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_DB: fraudguard_test
+          POSTGRES_USER: fraudguard
+          POSTGRES_PASSWORD: test_only_not_a_secret
+          REDIS_HOST: localhost
+
+      - name: Contract tests
+        run: pnpm test:contract
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: quality
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - name: Build all packages and apps
+        run: pnpm build
+
+  # ---------------------------------------------------------------------------
+  # Security gates. A committed secret fails the build — remediation is to
+  # ROTATE the secret first, then purge history (SECURITY.md).
+  # ---------------------------------------------------------------------------
+  security:
+    name: Security checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # full history — gitleaks scans commits, not just the tree
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Dependency audit
+        run: pnpm audit --audit-level moderate
+
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Aggregate gate — the single required status check for branch protection.
+  # ---------------------------------------------------------------------------
+  ci-passed:
+    name: CI passed
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [quality, architecture, integration, build, security]
+
+    steps:
+      - name: Verify all jobs succeeded
+        run: |
+          if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            echo "One or more required checks failed."
+            exit 1
+          fi
+          echo "All required checks passed."
