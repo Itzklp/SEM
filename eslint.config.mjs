@@ -1,0 +1,110 @@
+// @ts-check
+import js from '@eslint/js';
+import tseslint from 'typescript-eslint';
+import importPlugin from 'eslint-plugin-import';
+import prettier from 'eslint-config-prettier';
+
+export default tseslint.config(
+  {
+    ignores: [
+      '**/dist/**',
+      '**/coverage/**',
+      '**/node_modules/**',
+      '**/.turbo/**',
+      'ml/**',
+      '**/*.js',
+      '**/*.mjs',
+    ],
+  },
+
+  js.configs.recommended,
+  ...tseslint.configs.strictTypeChecked,
+  ...tseslint.configs.stylisticTypeChecked,
+
+  {
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    plugins: { import: importPlugin },
+    rules: {
+      // --- CONTRIBUTING.md prohibitions, enforced -------------------------
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-non-null-assertion': 'error',
+      '@typescript-eslint/explicit-module-boundary-types': 'error',
+      'no-console': 'error', // use the injected logger
+      'no-debugger': 'error',
+
+      // A caught error that is neither handled nor rethrown is a silent
+      // failure — the hardest kind of bug to diagnose in a distributed system.
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': 'error',
+      '@typescript-eslint/require-await': 'error',
+      '@typescript-eslint/await-thenable': 'error',
+
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
+        { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
+      ],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+
+      'import/order': [
+        'error',
+        {
+          groups: ['builtin', 'external', 'internal', 'parent', 'sibling', 'index'],
+          pathGroups: [{ pattern: '@fraudguard/**', group: 'internal' }],
+          'newlines-between': 'always',
+          alphabetize: { order: 'asc', caseInsensitive: true },
+        },
+      ],
+      'import/no-cycle': 'error',
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // packages/domain must stay I/O-free and framework-free (ADR-004).
+  //
+  // This is a first line of defence for developer feedback in the editor.
+  // The authoritative check is the architecture test (ADR-003), which
+  // traverses the full import graph rather than direct imports only.
+  // -------------------------------------------------------------------------
+  {
+    files: ['packages/domain/**/*.ts'],
+    rules: {
+      'import/no-restricted-paths': 'off',
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: 'pg', message: 'packages/domain must not perform I/O (ADR-004).' },
+            { name: 'ioredis', message: 'packages/domain must not perform I/O (ADR-004).' },
+            { name: 'kafkajs', message: 'packages/domain must not perform I/O (ADR-004).' },
+            { name: 'drizzle-orm', message: 'packages/domain must not perform I/O (ADR-004).' },
+            { name: '@nestjs/common', message: 'packages/domain must stay framework-free (ADR-004).' },
+            { name: '@nestjs/core', message: 'packages/domain must stay framework-free (ADR-004).' },
+          ],
+          patterns: [
+            { group: ['node:fs', 'node:net', 'node:http*'], message: 'packages/domain must not perform I/O (ADR-004).' },
+          ],
+        },
+      ],
+    },
+  },
+
+  // Tests: relax the rules that exist to protect production code.
+  {
+    files: ['**/*.test.ts', '**/*.spec.ts', 'tests/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-non-null-assertion': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/explicit-module-boundary-types': 'off',
+    },
+  },
+
+  prettier,
+);

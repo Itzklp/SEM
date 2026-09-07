@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+
+    // --- Strictness -------------------------------------------------------
+    // Every flag below is on deliberately. CONTRIBUTING.md prohibits `any`
+    // and non-null assertions; these settings are what make that enforceable
+    // rather than a matter of reviewer vigilance.
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "useUnknownInCatchVariables": true,
+    "alwaysStrict": true,
+
+    // Catches a whole class of bug that `strict` alone misses: indexing into
+    // a record or array yields `T | undefined`, so a missing feature value
+    // must be handled rather than silently flowing through as undefined.
+    // Directly relevant to ADR-002's default-on-miss requirement.
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noPropertyAccessFromIndexSignature": true,
+
+    // --- Emit -------------------------------------------------------------
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": true,
+    "incremental": true,
+    "removeComments": false,
+
+    // --- Interop ----------------------------------------------------------
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+
+    // Required by NestJS decorators
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
+    "baseUrl": ".",
+    "paths": {
+      "@fraudguard/contracts": ["packages/contracts/src"],
+      "@fraudguard/domain": ["packages/domain/src"],
+      "@fraudguard/config": ["packages/config/src"],
+      "@fraudguard/observability": ["packages/observability/src"],
+      "@fraudguard/persistence": ["packages/persistence/src"],
+      "@fraudguard/messaging": ["packages/messaging/src"],
+      "@fraudguard/feature-store": ["packages/feature-store/src"],
+      "@fraudguard/testkit": ["packages/testkit/src"]
+    }
+  },
+  "exclude": ["node_modules", "dist", "coverage", "**/*.test.ts", "**/*.spec.ts"]
+}

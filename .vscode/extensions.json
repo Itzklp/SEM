@@ -1,0 +1,12 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "ms-azuretools.vscode-docker",
+    "ms-python.python",
+    "redhat.vscode-yaml",
+    "42crunch.vscode-openapi",
+    "ms-vscode.powershell",
+    "bierner.markdown-mermaid"
+  ]
+}

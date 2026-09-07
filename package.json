@@ -1,0 +1,106 @@
+{
+  "name": "fraudguard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Real-time distributed payment fraud detection and decisioning platform",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "build": "pnpm -r --filter \"./packages/**\" --filter \"./apps/**\" build",
+    "dev": "pnpm -r --parallel --filter \"./apps/**\" dev",
+    "clean": "pnpm -r exec rimraf dist coverage .turbo *.tsbuildinfo",
+
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json && pnpm -r typecheck",
+
+    "test": "pnpm test:unit",
+    "test:unit": "jest --selectProjects unit --coverage",
+    "test:integration": "jest --selectProjects integration --runInBand",
+    "test:contract": "jest --selectProjects contract",
+    "test:e2e": "jest --selectProjects e2e --runInBand",
+    "test:resilience": "jest --selectProjects resilience --runInBand",
+    "test:architecture": "jest --selectProjects architecture",
+    "test:load": "node scripts/run-load-tests.mjs",
+    "test:all": "pnpm test:unit && pnpm test:architecture && pnpm test:integration && pnpm test:contract && pnpm test:e2e",
+
+    "docker:up": "docker compose --profile core up -d",
+    "docker:up:obs": "docker compose --profile core --profile observability up -d",
+    "docker:up:all": "docker compose --profile core --profile observability --profile apps up -d",
+    "docker:down": "docker compose --profile core --profile observability --profile apps down",
+    "docker:reset": "docker compose --profile core --profile observability --profile apps down -v",
+    "docker:logs": "docker compose logs -f",
+    "docker:ps": "docker compose ps",
+
+    "db:migrate": "pnpm --filter @fraudguard/persistence migrate",
+    "db:rollback": "pnpm --filter @fraudguard/persistence rollback",
+    "db:generate": "pnpm --filter @fraudguard/persistence generate",
+
+    "seed": "pnpm --filter @fraudguard/testkit seed",
+    "audit:env": "powershell -ExecutionPolicy Bypass -File scripts/audit-environment.ps1",
+
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.6.0",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.10.0",
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "eslint": "^9.17.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-import": "^2.31.0",
+    "husky": "^9.1.7",
+    "jest": "^29.7.0",
+    "lint-staged": "^15.2.11",
+    "prettier": "^3.4.2",
+    "rimraf": "^6.0.1",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.7.2"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix --max-warnings 0",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
+  },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ],
+    "rules": {
+      "scope-enum": [
+        2,
+        "always",
+        [
+          "fraud-api",
+          "event-worker",
+          "review-api",
+          "ml-service",
+          "dashboard",
+          "domain",
+          "contracts",
+          "feature-store",
+          "persistence",
+          "messaging",
+          "observability",
+          "config",
+          "testkit",
+          "infra",
+          "docs",
+          "ci",
+          "deps"
+        ]
+      ]
+    }
+  }
+}
