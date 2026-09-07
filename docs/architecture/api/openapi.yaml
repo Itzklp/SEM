@@ -1,0 +1,617 @@
+openapi: 3.0.3
+info:
+  title: FraudGuard API
+  version: "1.0"
+  description: >
+    Real-time payment fraud detection and decisioning platform. This spec is the
+    hand-authored source of truth for v1; the runtime Zod schemas in
+    packages/contracts are the enforced source of truth and are kept in sync with
+    this document by contract test (CT-, see docs/testing/test-strategy.md).
+
+    Endpoint set is drawn from requirements.md FR-001, FR-011, FR-012, FR-014, FR-015.
+  license:
+    name: Academic prototype — not for production use
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: fraud-api (hot path) — local development
+  - url: http://localhost:3001/api/v1
+    description: review-api (cold path) — local development
+
+tags:
+  - name: Fraud Scoring
+    description: The latency-critical hot path (ADR-003).
+  - name: Transactions
+    description: Query APIs — cold path.
+  - name: Fraud Cases
+    description: The review workflow (FR-011).
+  - name: Models
+    description: Model registry (FR-012).
+  - name: Operations
+    description: Health and metrics (FR-013).
+
+security:
+  - bearerAuth: []
+
+paths:
+  /fraud/score:
+    post:
+      tags: [Fraud Scoring]
+      summary: Score a payment authorization request
+      description: >
+        FR-001, FR-006. The single hot-path endpoint. p99 target < 200ms at 2000 TPS
+        (NFR-002) — TARGET until measured in Phase 9.
+      operationId: scoreTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScoreRequest"
+      responses:
+        "200":
+          description: A decision was reached (possibly degraded — see the `degraded` field).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScoreResponse"
+        "400":
+          description: Malformed request. No side effects occurred (FR-001 acceptance criteria).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          description: Rate limited or load-shed (ADR-005 overload policy).
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: >
+            PostgreSQL unavailable — fail-closed (ADR-005). The decision could not be
+            durably recorded, so none was returned.
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /transactions/{id}:
+    get:
+      tags: [Transactions]
+      summary: Retrieve a transaction's full recoverable basis
+      description: FR-008, FR-014. Cold path.
+      operationId: getTransaction
+      parameters:
+        - $ref: "#/components/parameters/TransactionId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /fraud/cases:
+    get:
+      tags: [Fraud Cases]
+      summary: List fraud cases
+      description: FR-011, FR-014. Defaults to open cases — this is the review queue.
+      operationId: listFraudCases
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/CaseStatus"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PaginationEnvelope"
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/FraudCase"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /fraud/cases/{id}:
+    get:
+      tags: [Fraud Cases]
+      summary: Retrieve one fraud case
+      operationId: getFraudCase
+      parameters:
+        - $ref: "#/components/parameters/CaseId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FraudCase"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /fraud/cases/{id}/review:
+    post:
+      tags: [Fraud Cases]
+      summary: Record a reviewer's decision on a case
+      description: >
+        FR-011. Requires the `review` privilege (distinct from the `score` privilege
+        used by /fraud/score — FR-015). `reviewerId` is taken from the authenticated
+        caller, never from the request body (ASM-006).
+      operationId: reviewFraudCase
+      parameters:
+        - $ref: "#/components/parameters/CaseId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewCaseRequest"
+      responses:
+        "200":
+          description: The case's new state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FraudCase"
+        "400":
+          description: The requested action is illegal for the case's current status (already closed).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /models:
+    get:
+      tags: [Models]
+      summary: List registered scoring models
+      description: FR-012. Populated meaningfully from Phase 10; stub/rules register a baseline entry.
+      operationId: listModels
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ModelVersion"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /health:
+    get:
+      tags: [Operations]
+      summary: Service and dependency health
+      description: >
+        FR-013. Reports per-dependency status, so degradation (ADR-005) is visible
+        before decisions changing is the first sign anyone notices.
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: Healthy or degraded — see `dependencies`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /metrics:
+    get:
+      tags: [Operations]
+      summary: Prometheus scrape endpoint
+      description: FR-013, NFR-011. Not JSON — Prometheus text exposition format.
+      operationId: getMetrics
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    TransactionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/Id"
+    CaseId:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/Id"
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  responses:
+    Unauthorized:
+      description: Missing, malformed, expired or forged authentication token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Authenticated, but lacking the required privilege (FR-015).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: No resource with that identifier.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    # Mirrors packages/contracts/src/common.ts idSchema.
+    Id:
+      type: string
+      pattern: "^[a-zA-Z0-9_-]{1,128}$"
+
+    Money:
+      type: object
+      required: [minorUnits, currency]
+      properties:
+        minorUnits:
+          type: integer
+          minimum: 0
+          description: Integer minor units (cents) — never a float. See packages/domain Money.
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+
+    Decision:
+      type: string
+      enum: [ALLOW, REVIEW, BLOCK]
+
+    DegradedReason:
+      type: string
+      enum: [NONE, FEATURES_UNAVAILABLE, ML_UNAVAILABLE]
+
+    ScoringProvider:
+      type: string
+      enum: [stub, rules, ml]
+
+    TransactionStatus:
+      type: string
+      enum: [RECEIVED, VALIDATED, REJECTED, DUPLICATE, FEATURES_LOADED, SCORED, DECIDED]
+
+    CaseStatus:
+      type: string
+      enum: [OPEN, APPROVED, BLOCKED, ESCALATED]
+
+    CaseAction:
+      type: string
+      enum: [APPROVE, BLOCK, ESCALATE]
+
+    # Mirrors packages/contracts/src/dto/scoring.dto.ts scoreRequestSchema.
+    # Note what is absent: no field anywhere can carry a card number (SECURITY.md).
+    ScoreRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [transactionId, userId, merchantId, deviceId, amount, paymentMethod, ipAddress, timestamp]
+      properties:
+        transactionId:
+          $ref: "#/components/schemas/Id"
+        userId:
+          $ref: "#/components/schemas/Id"
+        merchantId:
+          $ref: "#/components/schemas/Id"
+        deviceId:
+          $ref: "#/components/schemas/Id"
+        amount:
+          $ref: "#/components/schemas/Money"
+        paymentMethod:
+          $ref: "#/components/schemas/Id"
+          description: A tokenised payment reference (e.g. "card_token_abc123"). Never a PAN.
+        ipAddress:
+          type: string
+          format: ipv4
+        timestamp:
+          type: string
+          format: date-time
+
+    DecisionReason:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          description: Client-safe explanation only. Never carries internal weights or thresholds (FR-007, ST-LEAK-001).
+
+    ScoreResponse:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          transactionId,
+          decision,
+          riskScore,
+          reasons,
+          policyVersion,
+          modelVersion,
+          scoringProvider,
+          degraded,
+          degradedReason,
+          processingTimeMs,
+        ]
+      properties:
+        transactionId:
+          $ref: "#/components/schemas/Id"
+        decision:
+          $ref: "#/components/schemas/Decision"
+        riskScore:
+          type: number
+          minimum: 0
+          maximum: 1
+        reasons:
+          type: array
+          items:
+            $ref: "#/components/schemas/DecisionReason"
+        policyVersion:
+          type: string
+        modelVersion:
+          type: string
+        scoringProvider:
+          $ref: "#/components/schemas/ScoringProvider"
+        degraded:
+          type: boolean
+          description: ADR-005 — true whenever a dependency was unavailable. Never silent.
+        degradedReason:
+          $ref: "#/components/schemas/DegradedReason"
+        processingTimeMs:
+          type: number
+          minimum: 0
+
+    TransactionDetail:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          transactionId,
+          userId,
+          merchantId,
+          deviceId,
+          amount,
+          paymentMethod,
+          ipAddress,
+          timestamp,
+          status,
+          decision,
+          featureSummary,
+        ]
+      properties:
+        transactionId:
+          $ref: "#/components/schemas/Id"
+        userId:
+          $ref: "#/components/schemas/Id"
+        merchantId:
+          $ref: "#/components/schemas/Id"
+        deviceId:
+          $ref: "#/components/schemas/Id"
+        amount:
+          $ref: "#/components/schemas/Money"
+        paymentMethod:
+          $ref: "#/components/schemas/Id"
+        ipAddress:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          $ref: "#/components/schemas/TransactionStatus"
+        decision:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/ScoreResponse"
+        featureSummary:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: number
+          description: The feature vector as it stood at scoring time — dashboard investigation screen (Brief §31).
+
+    FraudCase:
+      type: object
+      additionalProperties: false
+      required: [caseId, transactionId, status, createdAt, reviewedAt, reviewerId, reviewReason]
+      properties:
+        caseId:
+          $ref: "#/components/schemas/Id"
+        transactionId:
+          $ref: "#/components/schemas/Id"
+        status:
+          $ref: "#/components/schemas/CaseStatus"
+        createdAt:
+          type: string
+          format: date-time
+        reviewedAt:
+          type: string
+          format: date-time
+          nullable: true
+        reviewerId:
+          $ref: "#/components/schemas/Id"
+          nullable: true
+        reviewReason:
+          type: string
+          nullable: true
+
+    ReviewCaseRequest:
+      type: object
+      additionalProperties: false
+      required: [action, reason]
+      properties:
+        action:
+          $ref: "#/components/schemas/CaseAction"
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1000
+
+    ModelMetrics:
+      type: object
+      description: FR-018 §29 — accuracy alone is meaningless on imbalanced fraud data; every field is required for a candidate model.
+      required:
+        [
+          precision,
+          recall,
+          f1,
+          rocAuc,
+          prAuc,
+          falsePositiveRate,
+          falseNegativeRate,
+          inferenceLatencyP99Ms,
+        ]
+      properties:
+        precision:
+          type: number
+        recall:
+          type: number
+        f1:
+          type: number
+        rocAuc:
+          type: number
+        prAuc:
+          type: number
+        falsePositiveRate:
+          type: number
+        falseNegativeRate:
+          type: number
+        inferenceLatencyP99Ms:
+          type: number
+
+    ModelVersion:
+      type: object
+      additionalProperties: false
+      required: [modelVersion, providerName, description, registeredAt, active, metrics]
+      properties:
+        modelVersion:
+          type: string
+        providerName:
+          type: string
+        description:
+          type: string
+        registeredAt:
+          type: string
+          format: date-time
+        active:
+          type: boolean
+        metrics:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/ModelMetrics"
+
+    HealthResponse:
+      type: object
+      required: [status, dependencies]
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        dependencies:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [up, down, degraded]
+              latencyMs:
+                type: number
+
+    PaginationEnvelope:
+      type: object
+      required: [page, pageSize, totalItems]
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalItems:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                type: object
+                required: [field, message]
+                properties:
+                  field:
+                    type: string
+                  message:
+                    type: string
+            requestId:
+              type: string
