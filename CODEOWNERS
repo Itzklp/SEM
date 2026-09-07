@@ -1,0 +1,49 @@
+# FraudGuard — code ownership
+#
+# Ownership means accountability for delivery and a required review, NOT
+# exclusive access. Everyone works across boundaries; see
+# docs/TEAM_TASK_BREAKDOWN.md.
+#
+# D1  Dalsania Kalpkumar Pradipkumar (2025H1030209P)  API, domain, decisioning, security
+# D2  Milap Chaudhary (2025H1030207P)                 Events, features, data, infrastructure
+# D3  Lokesh Patil (2025H1030054P)                    Testing, observability, performance, ML
+#
+# Replace the placeholders below with real GitHub usernames once the remote exists.
+
+# Default — any file not matched below needs a review from someone
+*                                   @team04-d1 @team04-d2 @team04-d3
+
+# --- D1: API, domain, decisioning, security ---------------------------------
+/apps/fraud-api/                    @team04-d1
+/apps/review-api/                   @team04-d1
+/packages/domain/                   @team04-d1
+/SECURITY.md                        @team04-d1
+/docs/security/                     @team04-d1
+
+# --- D2: events, features, data, infrastructure -----------------------------
+/apps/event-worker/                 @team04-d2
+/packages/messaging/                @team04-d2
+/packages/feature-store/            @team04-d2
+/packages/persistence/              @team04-d2
+/packages/config/                   @team04-d2
+/infrastructure/                    @team04-d2
+/docker-compose.yml                 @team04-d2
+
+# --- D3: testing, observability, performance, dashboard, ML -----------------
+/tests/                             @team04-d3
+/packages/observability/            @team04-d3
+/packages/testkit/                  @team04-d3
+/apps/dashboard/                    @team04-d3
+/apps/ml-service/                   @team04-d3
+/ml/                                @team04-d3
+/docs/testing/                      @team04-d3
+/.github/                           @team04-d3
+
+# --- Shared coordination surfaces: ALL THREE must approve -------------------
+# These are the interfaces every stream builds against. A unilateral change
+# here breaks the other two developers' work silently.
+/packages/contracts/                @team04-d1 @team04-d2 @team04-d3
+/docs/adr/                          @team04-d1 @team04-d2 @team04-d3
+/docs/architecture/                 @team04-d1 @team04-d2 @team04-d3
+/docs/requirements/                 @team04-d1 @team04-d2 @team04-d3
+/CONTRIBUTING.md                    @team04-d1 @team04-d2 @team04-d3
