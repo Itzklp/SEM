@@ -1,0 +1,16 @@
+{
+  "name": "@fraudguard/domain",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Core fraud domain: entities, value objects, lifecycle state machines, scoring and rule abstractions. Zero I/O, zero framework dependency (ADR-004).",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}
