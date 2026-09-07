@@ -1,0 +1,19 @@
+{
+  "name": "@fraudguard/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Single source of truth for wire formats: API request/response DTOs and Kafka event schemas, as Zod schemas with inferred TypeScript types.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@fraudguard/domain": "workspace:*",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}
