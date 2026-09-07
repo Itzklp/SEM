@@ -73,7 +73,7 @@ synchronously during authorization.
   N instances behind a load balancer, each holds a partial view, so the features a
   transaction sees depend on which instance received it. Velocity detection would degrade
   as we scale out — the exact opposite of the required behaviour. Also lost on restart.
-- A small in-process cache for *slow-moving reference data* (merchant risk scores, policy
+- A small in-process cache for _slow-moving reference data_ (merchant risk scores, policy
   config) is still worthwhile and is not excluded by this decision.
 
 ### D. A dedicated feature-store product (Feast, Tecton)
@@ -105,7 +105,7 @@ synchronously during authorization.
 - **Redis becomes a hot-path dependency.** Mitigated by the degraded mode in ADR-005:
   every feature has a documented default, and a Redis outage produces cautious-open
   decisions rather than errors. This is explicitly tested (NFR-005).
-- **Not durable by default.** Acceptable, because features are *derived* state: they can
+- **Not durable by default.** Acceptable, because features are _derived_ state: they can
   be rebuilt by replaying Kafka. That rebuild path must actually be implemented and
   tested, not assumed — tracked as a Phase 4 deliverable.
 - Memory grows with tracked entities. Bounded by TTLs and a documented maximum keyspace;

@@ -16,8 +16,8 @@ PostgreSQL and Kafka — and there is no transaction spanning both.
 That produces the classic dual-write problem. Naively:
 
 ```ts
-await db.insert(decision);        // (1)
-await kafka.produce(event);       // (2)
+await db.insert(decision); // (1)
+await kafka.produce(event); // (2)
 ```
 
 If (1) succeeds and (2) fails, the decision exists but no consumer ever learns of it: no
@@ -145,7 +145,7 @@ Published rows are pruned by a retention job; the durable history lives in
 
 ### Positive
 
-- No lost events. If a decision was committed, its event *will* be published.
+- No lost events. If a decision was committed, its event _will_ be published.
 - The hot path is untouched by broker health — Kafka can be down for the entire
   authorization and nothing observable changes.
 - The extra hot-path cost is one `INSERT` in a transaction already being performed —

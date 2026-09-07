@@ -1,7 +1,7 @@
 packages:
-  - 'apps/*'
-  - 'packages/*'
-  - 'tests'
+  - "apps/*"
+  - "packages/*"
+  - "tests"
 
 # Excluded from the Node workspace: apps/ml-service is a Python project
 # (Phase 10) and manages its own dependencies via ml/requirements.txt.

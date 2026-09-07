@@ -10,13 +10,13 @@ Requirement → Design component → Implementation → Test case → Test resul
 
 **Status legend**
 
-| Status | Meaning |
-| --- | --- |
-| `PLANNED` | Designed, not implemented |
-| `IN PROGRESS` | Implementation started |
+| Status        | Meaning                              |
+| ------------- | ------------------------------------ |
+| `PLANNED`     | Designed, not implemented            |
+| `IN PROGRESS` | Implementation started               |
 | `IMPLEMENTED` | Code complete, tests not yet passing |
-| `VERIFIED` | Code complete and its tests pass |
-| `BLOCKED` | Cannot proceed; blocker named |
+| `VERIFIED`    | Code complete and its tests pass     |
+| `BLOCKED`     | Cannot proceed; blocker named        |
 
 **Everything below is `PLANNED`.** No implementation exists yet — this is the Phase 0
 baseline, and the matrix is filled in as phases complete. `Result` stays empty until a
@@ -26,62 +26,62 @@ test has actually run; it is never filled speculatively.
 
 ## Functional requirements
 
-| Req | Design component | ADR | Implementation | Test case | Phase | Status | Result |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| **FR-001** Accept and validate authorization requests | `fraud-api` ingress; `packages/contracts` schemas | ADR-003 | `apps/fraud-api/src/scoring/` | `UT-API-001..010` validation · `IT-API-001` happy path · `IT-API-002` malformed rejection | 3 | PLANNED | — |
-| **FR-002** Continuously updated behavioural features | `packages/feature-store`; feature consumers in `event-worker` | ADR-002 | `packages/feature-store/` | `UT-FEAT-001..015` determinism · `IT-FEAT-001` N-transaction accuracy · `IT-FEAT-002` rebuild from replay | 4 | PLANNED | — |
-| **FR-003** Configurable deterministic rules | Rule engine in `packages/domain` | ADR-004 | `packages/domain/src/rules/` | `UT-RULE-001..030` per-rule · `UT-RULE-031` add rule without engine change | 5 | PLANNED | — |
-| **FR-004** ML risk score via stable abstraction | `FraudScoringProvider` (Strategy) | ADR-004 | `packages/domain/src/scoring/` | `UT-SCORE-001..008` stub determinism · `CT-SCORE-001` provider substitutability · `IT-ML-001` ML provider (Phase 10) | 5, 10 | PLANNED | — |
-| **FR-005** Combined normalised risk score | Score combiner in `packages/domain` | — | `packages/domain/src/scoring/combiner.ts` | `UT-COMB-001..010` determinism and bounds | 5 | PLANNED | — |
-| **FR-006** ALLOW / REVIEW / BLOCK classification | Decision engine | ADR-004 | `packages/domain/src/decision/` | `UT-DEC-001..015` thresholds and boundaries · `IT-DEC-001` runtime policy change | 5 | PLANNED | — |
-| **FR-007** Explainable decisions | Reason builder | — | `packages/domain/src/decision/reasons.ts` | `UT-EXPL-001` reason present on non-ALLOW · `UT-EXPL-002` **no internal leakage** | 5 | PLANNED | — |
-| **FR-008** Immutable audit trail | Audit consumer; `audit_events` | ADR-006 | `apps/event-worker/src/audit/` | `IT-AUDIT-001` full basis recoverable · `IT-AUDIT-002` append-only enforced | 6 | PLANNED | — |
-| **FR-009** Async event publication | Outbox + relay + Kafka | ADR-001, ADR-006 | `apps/event-worker/src/outbox/` | `IT-OUT-001` event published · `RT-KAFKA-001` broker outage then drain | 6 | PLANNED | — |
-| **FR-010** Case created for every REVIEW | Case consumer | ADR-006 | `apps/event-worker/src/cases/` | `IT-CASE-001` one case per REVIEW · `RT-DUP-001` **duplicate delivery → one case** | 6 | PLANNED | — |
-| **FR-011** Review workflow | `review-api`; case state machine | ADR-004 | `apps/review-api/src/cases/` | `UT-CASE-001..012` transitions · `IT-CASE-002` illegal transition rejected · `IT-CASE-003` reviewer recorded | 6 | PLANNED | — |
-| **FR-012** Model versioning | Model registry | — | `packages/persistence/src/models/` | `IT-MODEL-001` version on every decision · `IT-MODEL-002` version selection | 10 | PLANNED | — |
-| **FR-013** Real-time monitoring | `packages/observability`; Grafana | — | `packages/observability/` | `CT-METRIC-001` metrics contract · `IT-OBS-001` dashboards render under load | 7 | PLANNED | — |
-| **FR-014** Query APIs | `review-api` query module | ADR-004 | `apps/review-api/src/queries/` | `IT-QRY-001..006` pagination and authorization | 6 | PLANNED | — |
-| **FR-015** AuthN / AuthZ | Auth guards; gateway | — | `apps/fraud-api/src/auth/` | `UT-AUTH-001..008` · `IT-AUTH-001` 401 · `IT-AUTH-002` 403 | 3 | PLANNED | — |
-| **FR-016** Graceful degradation | Per-dependency policy | **ADR-005** | across `fraud-api` | `RT-REDIS-001` · `RT-ML-001` · `RT-KAFKA-001` · `RT-PG-001` · `RT-INST-001` | 8 | PLANNED | — |
-| **FR-017** Idempotent processing | Idempotency guard (Redis) | ADR-006 | `apps/fraud-api/src/idempotency/` | `IT-IDEM-001` replay returns original · `IT-IDEM-002` no duplicate side effects | 3 | PLANNED | — |
-| **FR-018** Deterministic synthetic generator | `packages/testkit` | — | `packages/testkit/src/generator/` | `UT-GEN-001` **same seed → identical sequence** · `UT-GEN-002..009` pattern coverage | 3 | PLANNED | — |
+| Req                                                   | Design component                                              | ADR              | Implementation                            | Test case                                                                                                            | Phase | Status  | Result |
+| ----------------------------------------------------- | ------------------------------------------------------------- | ---------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ----- | ------- | ------ |
+| **FR-001** Accept and validate authorization requests | `fraud-api` ingress; `packages/contracts` schemas             | ADR-003          | `apps/fraud-api/src/scoring/`             | `UT-API-001..010` validation · `IT-API-001` happy path · `IT-API-002` malformed rejection                            | 3     | PLANNED | —      |
+| **FR-002** Continuously updated behavioural features  | `packages/feature-store`; feature consumers in `event-worker` | ADR-002          | `packages/feature-store/`                 | `UT-FEAT-001..015` determinism · `IT-FEAT-001` N-transaction accuracy · `IT-FEAT-002` rebuild from replay            | 4     | PLANNED | —      |
+| **FR-003** Configurable deterministic rules           | Rule engine in `packages/domain`                              | ADR-004          | `packages/domain/src/rules/`              | `UT-RULE-001..030` per-rule · `UT-RULE-031` add rule without engine change                                           | 5     | PLANNED | —      |
+| **FR-004** ML risk score via stable abstraction       | `FraudScoringProvider` (Strategy)                             | ADR-004          | `packages/domain/src/scoring/`            | `UT-SCORE-001..008` stub determinism · `CT-SCORE-001` provider substitutability · `IT-ML-001` ML provider (Phase 10) | 5, 10 | PLANNED | —      |
+| **FR-005** Combined normalised risk score             | Score combiner in `packages/domain`                           | —                | `packages/domain/src/scoring/combiner.ts` | `UT-COMB-001..010` determinism and bounds                                                                            | 5     | PLANNED | —      |
+| **FR-006** ALLOW / REVIEW / BLOCK classification      | Decision engine                                               | ADR-004          | `packages/domain/src/decision/`           | `UT-DEC-001..015` thresholds and boundaries · `IT-DEC-001` runtime policy change                                     | 5     | PLANNED | —      |
+| **FR-007** Explainable decisions                      | Reason builder                                                | —                | `packages/domain/src/decision/reasons.ts` | `UT-EXPL-001` reason present on non-ALLOW · `UT-EXPL-002` **no internal leakage**                                    | 5     | PLANNED | —      |
+| **FR-008** Immutable audit trail                      | Audit consumer; `audit_events`                                | ADR-006          | `apps/event-worker/src/audit/`            | `IT-AUDIT-001` full basis recoverable · `IT-AUDIT-002` append-only enforced                                          | 6     | PLANNED | —      |
+| **FR-009** Async event publication                    | Outbox + relay + Kafka                                        | ADR-001, ADR-006 | `apps/event-worker/src/outbox/`           | `IT-OUT-001` event published · `RT-KAFKA-001` broker outage then drain                                               | 6     | PLANNED | —      |
+| **FR-010** Case created for every REVIEW              | Case consumer                                                 | ADR-006          | `apps/event-worker/src/cases/`            | `IT-CASE-001` one case per REVIEW · `RT-DUP-001` **duplicate delivery → one case**                                   | 6     | PLANNED | —      |
+| **FR-011** Review workflow                            | `review-api`; case state machine                              | ADR-004          | `apps/review-api/src/cases/`              | `UT-CASE-001..012` transitions · `IT-CASE-002` illegal transition rejected · `IT-CASE-003` reviewer recorded         | 6     | PLANNED | —      |
+| **FR-012** Model versioning                           | Model registry                                                | —                | `packages/persistence/src/models/`        | `IT-MODEL-001` version on every decision · `IT-MODEL-002` version selection                                          | 10    | PLANNED | —      |
+| **FR-013** Real-time monitoring                       | `packages/observability`; Grafana                             | —                | `packages/observability/`                 | `CT-METRIC-001` metrics contract · `IT-OBS-001` dashboards render under load                                         | 7     | PLANNED | —      |
+| **FR-014** Query APIs                                 | `review-api` query module                                     | ADR-004          | `apps/review-api/src/queries/`            | `IT-QRY-001..006` pagination and authorization                                                                       | 6     | PLANNED | —      |
+| **FR-015** AuthN / AuthZ                              | Auth guards; gateway                                          | —                | `apps/fraud-api/src/auth/`                | `UT-AUTH-001..008` · `IT-AUTH-001` 401 · `IT-AUTH-002` 403                                                           | 3     | PLANNED | —      |
+| **FR-016** Graceful degradation                       | Per-dependency policy                                         | **ADR-005**      | across `fraud-api`                        | `RT-REDIS-001` · `RT-ML-001` · `RT-KAFKA-001` · `RT-PG-001` · `RT-INST-001`                                          | 8     | PLANNED | —      |
+| **FR-017** Idempotent processing                      | Idempotency guard (Redis)                                     | ADR-006          | `apps/fraud-api/src/idempotency/`         | `IT-IDEM-001` replay returns original · `IT-IDEM-002` no duplicate side effects                                      | 3     | PLANNED | —      |
+| **FR-018** Deterministic synthetic generator          | `packages/testkit`                                            | —                | `packages/testkit/src/generator/`         | `UT-GEN-001` **same seed → identical sequence** · `UT-GEN-002..009` pattern coverage                                 | 3     | PLANNED | —      |
 
 ---
 
 ## Non-functional requirements
 
-| Req | Target | Design component | ADR | Test case | Phase | Status | Measured result |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| **NFR-001** Throughput | ≥ 2 000 TPS | Stateless `fraud-api` | ADR-003 | `LT-001..006` (500 → 20 000 TPS) | 9 | PLANNED | — |
-| **NFR-002** End-to-end latency | p99 < 200 ms @ 2 000 TPS | Hot path | ADR-003 | `LT-003` client-side percentiles | 9 | PLANNED | — |
-| **NFR-003** In-service latency | p99 < 50 ms | Per-stage instrumentation | ADR-003 | `LT-003` server-side histogram · `IT-PERF-001` budget assertion | 9 | PLANNED | — |
-| **NFR-004** Horizontal scaling | Throughput rises 1 → 2 → 3+ instances | Stateless design; shared Redis | ADR-002, ADR-004 | `LT-SCALE-001..003` | 9 | PLANNED | — ⚠️ **RISK-001** |
-| **NFR-005** Dependency failure tolerance | 0 authorization failures from Redis/Kafka/ML outage | Degradation policy | **ADR-005** | `RT-REDIS-001` · `RT-ML-001` · `RT-KAFKA-001` | 8 | PLANNED | — |
-| **NFR-006** Instance loss tolerance | No sustained error spike | Gateway health checks | ADR-004 | `RT-INST-001` | 8 | PLANNED | — |
-| **NFR-007** Hot/cold isolation | Analyst load does not affect authorization p99 | `review-api` bulkhead; separate pools | ADR-004 | `RT-BULK-001` | 8 | PLANNED | — |
-| **NFR-008** Data protection | AuthN+AuthZ everywhere; no secrets in source; **no PAN ever** | Auth; config; schema | — | `ST-001..010` · secret scan in CI | 11 | PLANNED | — |
-| **NFR-009** Abuse resistance | Rate limiting; replay and tampering rejected | Gateway; idempotency; request signing | ADR-005 | `ST-RATE-001` · `ST-REPLAY-001` · `ST-TAMPER-001` | 11 | PLANNED | — |
-| **NFR-010** Traceability | `requestId`/`traceId`/`transactionId` everywhere | `packages/observability`; OTel | — | `IT-TRACE-001` single transaction traced end to end | 7 | PLANNED | — |
-| **NFR-011** Golden signals | Throughput, percentiles, errors, lag, dependency latency | Prometheus registry | — | `CT-METRIC-001` | 7 | PLANNED | — |
-| **NFR-012** Consistency model | Strong on decision path; eventual downstream | Outbox; consumers | ADR-006 | `IT-CONS-001` decision immutable · `IT-CONS-002` downstream converges | 6 | PLANNED | — |
-| **NFR-013** No event loss | Events published after broker recovery | Outbox relay | **ADR-006** | `RT-KAFKA-001` outbox drains fully | 6 | PLANNED | — |
-| **NFR-014** Quality gates | Strict TS, lint clean, CI red on failure | CI workflow | — | CI pipeline itself | 0 | IN PROGRESS | — |
-| **NFR-015** Reproducibility | Any result reproducible by a teammate | Seeded generators; migrations; committed dashboards | — | `IT-REPRO-001` seed determinism · Phase 11 review | 11 | PLANNED | — |
+| Req                                      | Target                                                        | Design component                                    | ADR              | Test case                                                             | Phase | Status      | Measured result   |
+| ---------------------------------------- | ------------------------------------------------------------- | --------------------------------------------------- | ---------------- | --------------------------------------------------------------------- | ----- | ----------- | ----------------- |
+| **NFR-001** Throughput                   | ≥ 2 000 TPS                                                   | Stateless `fraud-api`                               | ADR-003          | `LT-001..006` (500 → 20 000 TPS)                                      | 9     | PLANNED     | —                 |
+| **NFR-002** End-to-end latency           | p99 < 200 ms @ 2 000 TPS                                      | Hot path                                            | ADR-003          | `LT-003` client-side percentiles                                      | 9     | PLANNED     | —                 |
+| **NFR-003** In-service latency           | p99 < 50 ms                                                   | Per-stage instrumentation                           | ADR-003          | `LT-003` server-side histogram · `IT-PERF-001` budget assertion       | 9     | PLANNED     | —                 |
+| **NFR-004** Horizontal scaling           | Throughput rises 1 → 2 → 3+ instances                         | Stateless design; shared Redis                      | ADR-002, ADR-004 | `LT-SCALE-001..003`                                                   | 9     | PLANNED     | — ⚠️ **RISK-001** |
+| **NFR-005** Dependency failure tolerance | 0 authorization failures from Redis/Kafka/ML outage           | Degradation policy                                  | **ADR-005**      | `RT-REDIS-001` · `RT-ML-001` · `RT-KAFKA-001`                         | 8     | PLANNED     | —                 |
+| **NFR-006** Instance loss tolerance      | No sustained error spike                                      | Gateway health checks                               | ADR-004          | `RT-INST-001`                                                         | 8     | PLANNED     | —                 |
+| **NFR-007** Hot/cold isolation           | Analyst load does not affect authorization p99                | `review-api` bulkhead; separate pools               | ADR-004          | `RT-BULK-001`                                                         | 8     | PLANNED     | —                 |
+| **NFR-008** Data protection              | AuthN+AuthZ everywhere; no secrets in source; **no PAN ever** | Auth; config; schema                                | —                | `ST-001..010` · secret scan in CI                                     | 11    | PLANNED     | —                 |
+| **NFR-009** Abuse resistance             | Rate limiting; replay and tampering rejected                  | Gateway; idempotency; request signing               | ADR-005          | `ST-RATE-001` · `ST-REPLAY-001` · `ST-TAMPER-001`                     | 11    | PLANNED     | —                 |
+| **NFR-010** Traceability                 | `requestId`/`traceId`/`transactionId` everywhere              | `packages/observability`; OTel                      | —                | `IT-TRACE-001` single transaction traced end to end                   | 7     | PLANNED     | —                 |
+| **NFR-011** Golden signals               | Throughput, percentiles, errors, lag, dependency latency      | Prometheus registry                                 | —                | `CT-METRIC-001`                                                       | 7     | PLANNED     | —                 |
+| **NFR-012** Consistency model            | Strong on decision path; eventual downstream                  | Outbox; consumers                                   | ADR-006          | `IT-CONS-001` decision immutable · `IT-CONS-002` downstream converges | 6     | PLANNED     | —                 |
+| **NFR-013** No event loss                | Events published after broker recovery                        | Outbox relay                                        | **ADR-006**      | `RT-KAFKA-001` outbox drains fully                                    | 6     | PLANNED     | —                 |
+| **NFR-014** Quality gates                | Strict TS, lint clean, CI red on failure                      | CI workflow                                         | —                | CI pipeline itself                                                    | 0     | IN PROGRESS | —                 |
+| **NFR-015** Reproducibility              | Any result reproducible by a teammate                         | Seeded generators; migrations; committed dashboards | —                | `IT-REPRO-001` seed determinism · Phase 11 review                     | 11    | PLANNED     | —                 |
 
 ---
 
 ## Test-case ID convention
 
-| Prefix | Kind | Runs against |
-| --- | --- | --- |
-| `UT-` | Unit | Nothing — pure, in-process |
-| `IT-` | Integration | Real infrastructure (Testcontainers) |
-| `CT-` | Contract | Schemas / provider substitutability |
-| `E2E-` | End-to-end | Full stack |
-| `RT-` | Resilience | Full stack, with injected failure |
-| `LT-` | Load | Full stack, under k6 |
-| `ST-` | Security | Full stack |
+| Prefix | Kind        | Runs against                         |
+| ------ | ----------- | ------------------------------------ |
+| `UT-`  | Unit        | Nothing — pure, in-process           |
+| `IT-`  | Integration | Real infrastructure (Testcontainers) |
+| `CT-`  | Contract    | Schemas / provider substitutability  |
+| `E2E-` | End-to-end  | Full stack                           |
+| `RT-`  | Resilience  | Full stack, with injected failure    |
+| `LT-`  | Load        | Full stack, under k6                 |
+| `ST-`  | Security    | Full stack                           |
 
 ---
 
@@ -90,14 +90,14 @@ test has actually run; it is never filled speculatively.
 Every requirement has at least one test case, and every ADR is exercised by at least one
 test:
 
-| ADR | Verified by |
-| --- | --- |
-| ADR-001 Kafka off the hot path | `RT-KAFKA-001` (Kafka down → authorizations unaffected) · architecture test |
-| ADR-002 Redis feature store | `IT-FEAT-001`, `IT-FEAT-002`, `RT-REDIS-001` |
-| ADR-003 Hot-path separation | Architecture test · `IT-PERF-001` budget assertion · `LT-003` |
-| ADR-004 Service decomposition | `RT-BULK-001` (bulkhead) · `RT-INST-001` (instance loss) · `LT-SCALE-*` |
-| ADR-005 Degradation policy | `RT-REDIS-001`, `RT-ML-001`, `RT-KAFKA-001`, `RT-PG-001`, `RT-INST-001` — **one per policy row** |
-| ADR-006 Transactional outbox | `IT-OUT-001` · `RT-KAFKA-001` · `RT-DUP-001` |
+| ADR                            | Verified by                                                                                      |
+| ------------------------------ | ------------------------------------------------------------------------------------------------ |
+| ADR-001 Kafka off the hot path | `RT-KAFKA-001` (Kafka down → authorizations unaffected) · architecture test                      |
+| ADR-002 Redis feature store    | `IT-FEAT-001`, `IT-FEAT-002`, `RT-REDIS-001`                                                     |
+| ADR-003 Hot-path separation    | Architecture test · `IT-PERF-001` budget assertion · `LT-003`                                    |
+| ADR-004 Service decomposition  | `RT-BULK-001` (bulkhead) · `RT-INST-001` (instance loss) · `LT-SCALE-*`                          |
+| ADR-005 Degradation policy     | `RT-REDIS-001`, `RT-ML-001`, `RT-KAFKA-001`, `RT-PG-001`, `RT-INST-001` — **one per policy row** |
+| ADR-006 Transactional outbox   | `IT-OUT-001` · `RT-KAFKA-001` · `RT-DUP-001`                                                     |
 
 **Gap review:** no requirement is currently untested and no ADR is unverified. This
 property is re-checked at each phase gate — a new requirement without a test case is a

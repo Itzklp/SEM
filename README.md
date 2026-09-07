@@ -29,14 +29,14 @@ That framing drives every decision in [docs/architecture/ARCHITECTURE.md](docs/a
 **Phase 0 complete — no application code exists yet.** This is deliberate: architecture
 and contracts come before implementation, and ML comes last.
 
-| Phase | Status |
-| --- | --- |
+| Phase                          | Status                                       |
+| ------------------------------ | -------------------------------------------- |
 | 0 — Environment and repository | ✅ Complete (⚠️ Docker installation pending) |
-| 1 — Architecture and domain | ⬜ Next |
-| 2 — Infrastructure | 🔒 Blocked on Docker |
-| 3–9 — Ingestion → performance | ⬜ Planned |
-| 10 — Machine learning | ⬜ Planned (**last**, by design) |
-| 11 — Hardening | ⬜ Planned |
+| 1 — Architecture and domain    | ⬜ Next                                      |
+| 2 — Infrastructure             | 🔒 Blocked on Docker                         |
+| 3–9 — Ingestion → performance  | ⬜ Planned                                   |
+| 10 — Machine learning          | ⬜ Planned (**last**, by design)             |
+| 11 — Hardening                 | ⬜ Planned                                   |
 
 Detail: [docs/ROADMAP.md](docs/ROADMAP.md)
 
@@ -66,12 +66,12 @@ pwsh -File scripts/audit-environment.ps1
 **These are targets. Nothing has been measured yet.** Per project rule, no number is
 presented as achieved until a reproducible test has produced it.
 
-| Metric | TARGET | MEASURED |
-| --- | --- | --- |
-| Throughput | ≥ 2 000 TPS | — |
-| End-to-end latency | p99 < 200 ms @ 2 000 TPS | — |
-| In-service latency | p99 < 50 ms | — |
-| Horizontal scaling | Throughput rises with instance count | — |
+| Metric             | TARGET                               | MEASURED |
+| ------------------ | ------------------------------------ | -------- |
+| Throughput         | ≥ 2 000 TPS                          | —        |
+| End-to-end latency | p99 < 200 ms @ 2 000 TPS             | —        |
+| In-service latency | p99 < 50 ms                          | —        |
+| Horizontal scaling | Throughput rises with instance count | —        |
 
 > **Measurement caveat.** The load generator runs on the same 4-core machine as the
 > system under test, so high-load latency figures will be pessimistic and partly reflect
@@ -109,7 +109,7 @@ React dashboard — **not** seven microservices, for reasons argued in
 
 ## Two rules that shape everything
 
-**1. ML is last.** The system must be complete, tested and measured *without* it. A
+**1. ML is last.** The system must be complete, tested and measured _without_ it. A
 stable `FraudScoringProvider` interface exists from Phase 5, with stub and rule-based
 implementations. `MLScoringProvider` arrives in Phase 10 as a configuration change — the
 decision engine, API contract and audit schema do not move. That also makes the eventual
@@ -122,28 +122,28 @@ distinctly everywhere in this repository. A test that fails is reported as faili
 
 ## Documentation
 
-| Document | What it covers |
-| --- | --- |
-| [SETUP.md](docs/SETUP.md) | Getting a machine running |
-| [DEVELOPMENT_ENVIRONMENT.md](docs/DEVELOPMENT_ENVIRONMENT.md) | Measured environment audit, capacity analysis, gaps |
-| [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) | C4 views, hot/cold paths, failure behaviour, patterns |
-| [requirements.md](docs/requirements/requirements.md) | FR/NFR baseline, assumptions, constraints, risks |
-| [traceability-matrix.md](docs/requirements/traceability-matrix.md) | Requirement → design → code → test → result |
-| [ROADMAP.md](docs/ROADMAP.md) | Phases, deliverables, exit criteria |
-| [TEAM_TASK_BREAKDOWN.md](docs/TEAM_TASK_BREAKDOWN.md) | Three-developer allocation |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Standards and Definition of Done |
-| [SECURITY.md](SECURITY.md) | Security posture |
+| Document                                                           | What it covers                                        |
+| ------------------------------------------------------------------ | ----------------------------------------------------- |
+| [SETUP.md](docs/SETUP.md)                                          | Getting a machine running                             |
+| [DEVELOPMENT_ENVIRONMENT.md](docs/DEVELOPMENT_ENVIRONMENT.md)      | Measured environment audit, capacity analysis, gaps   |
+| [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md)               | C4 views, hot/cold paths, failure behaviour, patterns |
+| [requirements.md](docs/requirements/requirements.md)               | FR/NFR baseline, assumptions, constraints, risks      |
+| [traceability-matrix.md](docs/requirements/traceability-matrix.md) | Requirement → design → code → test → result           |
+| [ROADMAP.md](docs/ROADMAP.md)                                      | Phases, deliverables, exit criteria                   |
+| [TEAM_TASK_BREAKDOWN.md](docs/TEAM_TASK_BREAKDOWN.md)              | Three-developer allocation                            |
+| [CONTRIBUTING.md](CONTRIBUTING.md)                                 | Standards and Definition of Done                      |
+| [SECURITY.md](SECURITY.md)                                         | Security posture                                      |
 
 ### Architecture decision records
 
-| ADR | Decision |
-| --- | --- |
+| ADR                                                      | Decision                                                         |
+| -------------------------------------------------------- | ---------------------------------------------------------------- |
 | [ADR-001](docs/adr/ADR-001-event-driven-architecture.md) | Kafka for async propagation, **never** in the authorization path |
-| [ADR-002](docs/adr/ADR-002-redis-feature-store.md) | Redis as the sole hot-path feature store |
-| [ADR-003](docs/adr/ADR-003-hot-path-design.md) | Hot/cold separation, with an enforced latency budget |
-| [ADR-004](docs/adr/ADR-004-service-decomposition.md) | Four deployables, not seven microservices |
-| [ADR-005](docs/adr/ADR-005-degradation-policy.md) | Per-dependency fail-open/fail-closed policy |
-| [ADR-006](docs/adr/ADR-006-transactional-outbox.md) | Transactional outbox for decision events |
+| [ADR-002](docs/adr/ADR-002-redis-feature-store.md)       | Redis as the sole hot-path feature store                         |
+| [ADR-003](docs/adr/ADR-003-hot-path-design.md)           | Hot/cold separation, with an enforced latency budget             |
+| [ADR-004](docs/adr/ADR-004-service-decomposition.md)     | Four deployables, not seven microservices                        |
+| [ADR-005](docs/adr/ADR-005-degradation-policy.md)        | Per-dependency fail-open/fail-closed policy                      |
+| [ADR-006](docs/adr/ADR-006-transactional-outbox.md)      | Transactional outbox for decision events                         |
 
 ---
 
@@ -152,17 +152,17 @@ distinctly everywhere in this repository. A test that fails is reported as faili
 Every component has a documented reason. Nothing is here to make the diagram look
 impressive.
 
-| Technology | Why |
-| --- | --- |
-| **Node.js 22 + TypeScript** | Non-blocking I/O suits a latency-critical, I/O-bound path; strict typing carries the contracts |
-| **NestJS + Fastify** | DI makes the provider/rule substitution testable; Fastify is the faster adapter |
-| **Redis** | Sub-millisecond hot-path feature reads with native TTL and atomic counters — [ADR-002](docs/adr/ADR-002-redis-feature-store.md) |
-| **PostgreSQL** | Durable, relational, queryable state. Off the hot path — [ADR-003](docs/adr/ADR-003-hot-path-design.md) |
-| **Kafka (KRaft)** | Durable async propagation with replay and independent consumers — [ADR-001](docs/adr/ADR-001-event-driven-architecture.md). KRaft to avoid a second JVM on 7.86 GB |
-| **Prometheus + Grafana + OpenTelemetry** | Golden signals, distributed tracing, dashboards as code |
-| **Pino** | Structured JSON logs with low overhead on the hot path |
-| **k6** | Load testing that produces the evidence NFR-001/002 require |
-| **Python + scikit-learn / XGBoost** | Phase 10 only |
+| Technology                               | Why                                                                                                                                                                |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Node.js 22 + TypeScript**              | Non-blocking I/O suits a latency-critical, I/O-bound path; strict typing carries the contracts                                                                     |
+| **NestJS + Fastify**                     | DI makes the provider/rule substitution testable; Fastify is the faster adapter                                                                                    |
+| **Redis**                                | Sub-millisecond hot-path feature reads with native TTL and atomic counters — [ADR-002](docs/adr/ADR-002-redis-feature-store.md)                                    |
+| **PostgreSQL**                           | Durable, relational, queryable state. Off the hot path — [ADR-003](docs/adr/ADR-003-hot-path-design.md)                                                            |
+| **Kafka (KRaft)**                        | Durable async propagation with replay and independent consumers — [ADR-001](docs/adr/ADR-001-event-driven-architecture.md). KRaft to avoid a second JVM on 7.86 GB |
+| **Prometheus + Grafana + OpenTelemetry** | Golden signals, distributed tracing, dashboards as code                                                                                                            |
+| **Pino**                                 | Structured JSON logs with low overhead on the hot path                                                                                                             |
+| **k6**                                   | Load testing that produces the evidence NFR-001/002 require                                                                                                        |
+| **Python + scikit-learn / XGBoost**      | Phase 10 only                                                                                                                                                      |
 
 ---
 

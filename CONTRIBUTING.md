@@ -26,15 +26,15 @@ applicable item below is true:
 
 ## 2. Branching
 
-| Branch | Purpose | Rules |
-| --- | --- | --- |
-| `main` | Always releasable | Protected. Merges from `develop` only |
-| `develop` | Integration | Protected. PRs only |
-| `feat/*` | New functionality | From `develop` |
-| `fix/*` | Bug fixes | From `develop` |
-| `docs/*` | Documentation | From `develop` |
-| `test/*` | Test-only work | From `develop` |
-| `refactor/*` | Behaviour-preserving change | From `develop` |
+| Branch       | Purpose                     | Rules                                 |
+| ------------ | --------------------------- | ------------------------------------- |
+| `main`       | Always releasable           | Protected. Merges from `develop` only |
+| `develop`    | Integration                 | Protected. PRs only                   |
+| `feat/*`     | New functionality           | From `develop`                        |
+| `fix/*`      | Bug fixes                   | From `develop`                        |
+| `docs/*`     | Documentation               | From `develop`                        |
+| `test/*`     | Test-only work              | From `develop`                        |
+| `refactor/*` | Behaviour-preserving change | From `develop`                        |
 
 ```
 feat/redis-feature-store
@@ -58,17 +58,17 @@ No direct commits to `main` or `develop`. No self-merge.
 [footer]
 ```
 
-| Type | Use for |
-| --- | --- |
-| `feat` | New capability |
-| `fix` | Bug fix |
-| `refactor` | Behaviour-preserving restructuring |
-| `perf` | Performance improvement — **state the measurement in the body** |
-| `test` | Tests only |
-| `docs` | Documentation only |
-| `build` | Build system, dependencies |
-| `ci` | CI configuration |
-| `chore` | Housekeeping |
+| Type       | Use for                                                         |
+| ---------- | --------------------------------------------------------------- |
+| `feat`     | New capability                                                  |
+| `fix`      | Bug fix                                                         |
+| `refactor` | Behaviour-preserving restructuring                              |
+| `perf`     | Performance improvement — **state the measurement in the body** |
+| `test`     | Tests only                                                      |
+| `docs`     | Documentation only                                              |
+| `build`    | Build system, dependencies                                      |
+| `ci`       | CI configuration                                                |
+| `chore`    | Housekeeping                                                    |
 
 Scopes: `fraud-api`, `event-worker`, `review-api`, `ml-service`, `dashboard`, `domain`,
 `contracts`, `feature-store`, `persistence`, `messaging`, `observability`, `config`,
@@ -111,21 +111,27 @@ head. If the message needs "and", it is probably two commits.
 
 ```markdown
 ## What
+
 One or two sentences.
 
 ## Why
+
 Requirement ID (FR-xxx / NFR-xxx) or ADR reference.
 
 ## How
+
 Approach, and any non-obvious decision.
 
 ## Hot-path impact
+
 None | Describe the change and its measured/estimated latency cost.
 
 ## Testing
+
 What was added; what it would catch if it broke.
 
 ## Checklist
+
 - [ ] Definition of Done satisfied
 - [ ] Traceability matrix updated
 - [ ] No secrets, no real data
@@ -174,15 +180,15 @@ resolved by evidence — a measurement, a test, or an ADR.
 
 ### Naming
 
-| Kind | Convention |
-| --- | --- |
-| Files | `kebab-case.ts` |
-| Classes, types, interfaces | `PascalCase` |
-| Functions, variables | `camelCase` |
-| Constants | `UPPER_SNAKE_CASE` |
-| Kafka topics | `dot.separated.lowercase` |
-| Metrics | `snake_case` with a unit suffix (`_seconds`, `_total`, `_bytes`) |
-| Database | `snake_case` |
+| Kind                       | Convention                                                       |
+| -------------------------- | ---------------------------------------------------------------- |
+| Files                      | `kebab-case.ts`                                                  |
+| Classes, types, interfaces | `PascalCase`                                                     |
+| Functions, variables       | `camelCase`                                                      |
+| Constants                  | `UPPER_SNAKE_CASE`                                               |
+| Kafka topics               | `dot.separated.lowercase`                                        |
+| Metrics                    | `snake_case` with a unit suffix (`_seconds`, `_total`, `_bytes`) |
+| Database                   | `snake_case`                                                     |
 
 ---
 
@@ -235,12 +241,12 @@ The project's credibility rests on this section.
 
 **Always label:**
 
-| Label | Meaning |
-| --- | --- |
-| `TARGET` | What we aim for. Not yet demonstrated |
-| `MEASURED` | Produced by a reproducible test. Cite the run |
-| `ESTIMATED` | Derived by reasoning. Say from what |
-| `ASSUMED` | Taken as given. Say why, and what happens if false |
+| Label       | Meaning                                            |
+| ----------- | -------------------------------------------------- |
+| `TARGET`    | What we aim for. Not yet demonstrated              |
+| `MEASURED`  | Produced by a reproducible test. Cite the run      |
+| `ESTIMATED` | Derived by reasoning. Say from what                |
+| `ASSUMED`   | Taken as given. Say why, and what happens if false |
 
 **Never write** "FraudGuard supports 10 000 TPS."
 **Write** "FraudGuard was tested at 10 000 TPS on the hardware in
@@ -264,24 +270,31 @@ reader would question, gets an ADR.
 
 ```markdown
 # ADR-NNN — Title
+
 **Status:** Proposed | Accepted | Superseded by ADR-MMM
 **Date:** YYYY-MM-DD
 **Deciders:**
 **Related:**
 
 ## Context
+
 The forces at play. What makes this a real decision.
 
 ## Decision
+
 What we are doing. Specific and concrete.
 
 ## Alternatives considered
+
 Each one, and **why it was rejected**. This is the most valuable section —
 it is what tells a future reader the option was understood, not overlooked.
 
 ## Consequences
+
 ### Positive
-### Negative     <- must not be empty. Every decision costs something.
+
+### Negative <- must not be empty. Every decision costs something.
+
 ### Neutral
 ```
 

@@ -50,7 +50,7 @@ The architecturally "purest" option, and the one most likely to be chosen for th
 reasons.
 
 - **Rejected because of latency.** Each hop costs a produce ack, a partition write, a
-  consumer poll cycle and a fetch. Even well-tuned, that is 10–30 ms *per hop*;
+  consumer poll cycle and a fetch. Even well-tuned, that is 10–30 ms _per hop_;
   `linger.ms` and consumer poll intervals make the tail far worse. Three hops plus
   response correlation would plausibly consume the entire 200 ms budget before any fraud
   logic ran.
@@ -73,7 +73,7 @@ reasons.
 - **Redis Streams** was genuinely attractive on a 7.86 GB machine — Redis is already
   required, so it costs no additional process. **Rejected** because it would make Redis a
   shared failure domain for both the hot path and all event propagation; a Redis incident
-  would then take out features *and* audit *and* case creation simultaneously. Isolating
+  would then take out features _and_ audit _and_ case creation simultaneously. Isolating
   failure domains is worth the memory.
 - **RabbitMQ** is a queue, not a log: no replay, and no independent consumer offsets over
   retained history. Replay matters here because Phase 10 needs to reconstruct training

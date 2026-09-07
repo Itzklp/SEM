@@ -11,7 +11,7 @@
 
 The original proposal sketch names seven services: `api-gateway`, `fraud-service`,
 `feature-service`, `decision-service`, `audit-service`, `review-service`, `ml-service`.
-That decomposition follows the *logical* components of the system, which is an intuitive
+That decomposition follows the _logical_ components of the system, which is an intuitive
 and common way to draw a distributed architecture — and, for this problem, the wrong one.
 
 The project must demonstrate distributed-systems competence. It must also be completely
@@ -29,23 +29,23 @@ load for them.
 **Four backend deployables plus one frontend.** A component becomes its own service only
 where it has a genuinely different failure domain, scaling profile, or runtime.
 
-| Deployable | Justification for a process boundary |
-| --- | --- |
-| **`fraud-api`** | The latency-critical hot path. Must scale horizontally and independently (NFR-004); it is the subject of the scaling experiment. Everything else is kept out of its process so nothing competes for its event loop |
-| **`event-worker`** | Different failure domain and opposite scaling profile — throughput-oriented, latency-tolerant. A slow consumer must be incapable of affecting an authorization. Scales by partition count, not by request rate |
-| **`review-api`** | **Bulkhead (NFR-007).** Analyst queries are heavy, unbounded and low-volume. In `fraud-api` they would contend for the same connection pool and event loop that authorizations need. One expensive case query must not raise authorization p99 |
-| **`ml-service`** | Different runtime (Python). Isolation converts an ML failure into a *dependency* failure with a defined fallback (ADR-005), rather than an in-process crash. Also scales independently, since inference cost differs from request-handling cost |
-| **`dashboard`** | Static frontend |
+| Deployable         | Justification for a process boundary                                                                                                                                                                                                            |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`fraud-api`**    | The latency-critical hot path. Must scale horizontally and independently (NFR-004); it is the subject of the scaling experiment. Everything else is kept out of its process so nothing competes for its event loop                              |
+| **`event-worker`** | Different failure domain and opposite scaling profile — throughput-oriented, latency-tolerant. A slow consumer must be incapable of affecting an authorization. Scales by partition count, not by request rate                                  |
+| **`review-api`**   | **Bulkhead (NFR-007).** Analyst queries are heavy, unbounded and low-volume. In `fraud-api` they would contend for the same connection pool and event loop that authorizations need. One expensive case query must not raise authorization p99  |
+| **`ml-service`**   | Different runtime (Python). Isolation converts an ML failure into a _dependency_ failure with a defined fallback (ADR-005), rather than an in-process crash. Also scales independently, since inference cost differs from request-handling cost |
+| **`dashboard`**    | Static frontend                                                                                                                                                                                                                                 |
 
 ### Components that remain in-process, and why
 
-| Proposed service | Actual home | Why a network boundary would be wrong |
-| --- | --- | --- |
-| `feature-service` | `packages/feature-store`, in `fraud-api` | On the read side this would be a **pure proxy in front of Redis**. It adds a hop (~1–5 ms plus its own tail) and a failure mode, in exchange for nothing — Redis is already a shared network service reachable by every instance. The genuinely separate concern is feature *writing*, which **is** separated, into `event-worker` |
-| `decision-service` | `packages/domain`, in `fraud-api` | A pure function of (rule results, score, policy). No state, no I/O, microseconds of CPU. A network call to compute a pure function would add latency and a failure mode to the most critical path in the system to save nothing |
-| Rule engine | `packages/domain`, in `fraud-api` | Same. Rules are *configuration*; reloading configuration does not require a separate process |
-| `audit-service` | `event-worker` | It is a Kafka consumer. It is already asynchronous and already isolated — as a consumer, not as a synchronous service |
-| `api-gateway` | Nginx container | Real infrastructure concern (TLS, rate limiting, load balancing), but not application code we should write |
+| Proposed service   | Actual home                              | Why a network boundary would be wrong                                                                                                                                                                                                                                                                                              |
+| ------------------ | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `feature-service`  | `packages/feature-store`, in `fraud-api` | On the read side this would be a **pure proxy in front of Redis**. It adds a hop (~1–5 ms plus its own tail) and a failure mode, in exchange for nothing — Redis is already a shared network service reachable by every instance. The genuinely separate concern is feature _writing_, which **is** separated, into `event-worker` |
+| `decision-service` | `packages/domain`, in `fraud-api`        | A pure function of (rule results, score, policy). No state, no I/O, microseconds of CPU. A network call to compute a pure function would add latency and a failure mode to the most critical path in the system to save nothing                                                                                                    |
+| Rule engine        | `packages/domain`, in `fraud-api`        | Same. Rules are _configuration_; reloading configuration does not require a separate process                                                                                                                                                                                                                                       |
+| `audit-service`    | `event-worker`                           | It is a Kafka consumer. It is already asynchronous and already isolated — as a consumer, not as a synchronous service                                                                                                                                                                                                              |
+| `api-gateway`      | Nginx container                          | Real infrastructure concern (TLS, rate limiting, load balancing), but not application code we should write                                                                                                                                                                                                                         |
 
 **Logical separation is preserved.** Each of these is an independent package with an
 explicit interface and its own test suite, with no dependency on the others' internals.
@@ -67,7 +67,7 @@ not currently need.
   any infrastructure, on a machine with 7.86 GB (CON-002).
 - **Rejected on team capacity.** Seven services × (deployment + config + observability +
   integration tests + operational docs) for three developers in one term, and the goal is
-  a system the team can explain *completely* (Brief §48).
+  a system the team can explain _completely_ (Brief §48).
 
 ### B. A single modular monolith
 
@@ -99,7 +99,7 @@ not currently need.
 
 ### Negative
 
-- The architecture looks *less* distributed than a seven-service diagram. This is a
+- The architecture looks _less_ distributed than a seven-service diagram. This is a
   presentational cost against an engineering benefit; the justification table above is
   the answer, and it is a stronger answer than a bigger diagram.
 - `fraud-api` is a larger process containing several logical components. Mitigated by

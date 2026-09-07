@@ -4,7 +4,7 @@ Gets a developer from a clean Windows machine to a running FraudGuard stack.
 
 The measured state of the reference machine, and the reasoning behind the choices here,
 is in [DEVELOPMENT_ENVIRONMENT.md](./DEVELOPMENT_ENVIRONMENT.md). Read that first if you
-want the *why*; this document is the *how*.
+want the _why_; this document is the _how_.
 
 **Target time:** ~45 minutes, most of it Docker Desktop downloading.
 
@@ -12,12 +12,12 @@ want the *why*; this document is the *how*.
 
 ## 0. Prerequisites at a glance
 
-| # | Step | Needed for | Skip if |
-| --- | --- | --- | --- |
-| 1 | Node.js 22 + pnpm 9 | Everything | `node -v` shows v22+ **and** `pnpm -v` shows 9+ |
-| 2 | Docker Desktop | Phase 2 onward: infra, integration/E2E/load tests | `docker compose version` works |
-| 3 | Python 3.11+ | Phase 10 (ML) only | Not doing ML work yet |
-| 4 | k6 | Phase 9 (load tests) only | `k6 version` works |
+| #   | Step                | Needed for                                        | Skip if                                         |
+| --- | ------------------- | ------------------------------------------------- | ----------------------------------------------- |
+| 1   | Node.js 22 + pnpm 9 | Everything                                        | `node -v` shows v22+ **and** `pnpm -v` shows 9+ |
+| 2   | Docker Desktop      | Phase 2 onward: infra, integration/E2E/load tests | `docker compose version` works                  |
+| 3   | Python 3.11+        | Phase 10 (ML) only                                | Not doing ML work yet                           |
+| 4   | k6                  | Phase 9 (load tests) only                         | `k6 version` works                              |
 
 Steps 1 and 2 are mandatory for any backend work. Steps 3 and 4 can wait.
 
@@ -94,7 +94,7 @@ to several GB and grow over time.
 Docker Desktop → **Settings → Resources → Advanced → Disk image location** →
 set to `D:\docker-data` → **Apply & restart**.
 
-Do this *before* pulling any images, otherwise you will move them later.
+Do this _before_ pulling any images, otherwise you will move them later.
 
 ### 2.4 Constrain Docker's resources (REQUIRED on this machine)
 
@@ -161,11 +161,11 @@ Infrastructure is grouped into Docker Compose **profiles** so that a constrained
 only runs what the current task needs. This is a direct consequence of the capacity
 analysis in DEVELOPMENT_ENVIRONMENT.md §5.1.
 
-| Profile | Contains | Approx. RAM | Use when |
-| --- | --- | --- | --- |
-| `core` | PostgreSQL, Redis, Kafka (KRaft) | ~2.0 GB | Normal development, unit + integration tests |
-| `observability` | Prometheus, Grafana | ~0.6 GB | Working on metrics/dashboards, and during load tests |
-| `apps` | fraud-api, event-worker, review-api | ~0.5 GB | Full containerised E2E; omit to run services on the host |
+| Profile         | Contains                            | Approx. RAM | Use when                                                 |
+| --------------- | ----------------------------------- | ----------- | -------------------------------------------------------- |
+| `core`          | PostgreSQL, Redis, Kafka (KRaft)    | ~2.0 GB     | Normal development, unit + integration tests             |
+| `observability` | Prometheus, Grafana                 | ~0.6 GB     | Working on metrics/dashboards, and during load tests     |
+| `apps`          | fraud-api, event-worker, review-api | ~0.5 GB     | Full containerised E2E; omit to run services on the host |
 
 ```powershell
 # Minimum viable development environment
@@ -188,14 +188,14 @@ pnpm docker:reset
 
 Both are supported. They differ in trade-offs, not in correctness.
 
-| | **Host mode** (recommended for development) | **Container mode** (recommended for E2E and load tests) |
-| --- | --- | --- |
-| Command | `pnpm docker:up` then `pnpm dev` | `pnpm docker:up:all` |
-| Hot reload | Yes | No (rebuild required) |
-| Debugger attach | Straightforward | Requires exposing the inspector port |
-| Resource cost | Lower — no extra container overhead | Higher |
-| Fidelity to deployment | Lower | Higher |
-| Horizontal scaling test | Not possible | `docker compose up --scale fraud-api=4` |
+|                         | **Host mode** (recommended for development) | **Container mode** (recommended for E2E and load tests) |
+| ----------------------- | ------------------------------------------- | ------------------------------------------------------- |
+| Command                 | `pnpm docker:up` then `pnpm dev`            | `pnpm docker:up:all`                                    |
+| Hot reload              | Yes                                         | No (rebuild required)                                   |
+| Debugger attach         | Straightforward                             | Requires exposing the inspector port                    |
+| Resource cost           | Lower — no extra container overhead         | Higher                                                  |
+| Fidelity to deployment  | Lower                                       | Higher                                                  |
+| Horizontal scaling test | Not possible                                | `docker compose up --scale fraud-api=4`                 |
 
 Host mode reaches infrastructure at `localhost`; container mode uses Compose service
 names. Both are covered by the same `.env.example` keys — only the host values differ,
@@ -220,23 +220,23 @@ curl http://localhost:3000/api/v1/health
 
 ## 5. Everyday commands
 
-| Command | Purpose |
-| --- | --- |
-| `pnpm install` | Install all workspace dependencies |
-| `pnpm dev` | Run all services in watch mode on the host |
-| `pnpm build` | Type-check and build every package and app |
-| `pnpm lint` / `pnpm lint:fix` | ESLint across the monorepo |
-| `pnpm format` | Prettier |
-| `pnpm typecheck` | `tsc --noEmit`, strict mode |
-| `pnpm test` | Unit tests (fast, no infrastructure required) |
-| `pnpm test:integration` | Integration tests (**requires** `core` profile up) |
-| `pnpm test:e2e` | End-to-end tests |
-| `pnpm test:resilience` | Failure-injection suite |
-| `pnpm test:load` | k6 load scenarios |
-| `pnpm db:migrate` / `pnpm db:rollback` | Schema migrations |
-| `pnpm docker:up` / `:obs` / `:all` | Start infrastructure by profile |
-| `pnpm docker:down` / `docker:reset` | Stop / stop and wipe volumes |
-| `pnpm seed` | Generate deterministic synthetic data |
+| Command                                | Purpose                                            |
+| -------------------------------------- | -------------------------------------------------- |
+| `pnpm install`                         | Install all workspace dependencies                 |
+| `pnpm dev`                             | Run all services in watch mode on the host         |
+| `pnpm build`                           | Type-check and build every package and app         |
+| `pnpm lint` / `pnpm lint:fix`          | ESLint across the monorepo                         |
+| `pnpm format`                          | Prettier                                           |
+| `pnpm typecheck`                       | `tsc --noEmit`, strict mode                        |
+| `pnpm test`                            | Unit tests (fast, no infrastructure required)      |
+| `pnpm test:integration`                | Integration tests (**requires** `core` profile up) |
+| `pnpm test:e2e`                        | End-to-end tests                                   |
+| `pnpm test:resilience`                 | Failure-injection suite                            |
+| `pnpm test:load`                       | k6 load scenarios                                  |
+| `pnpm db:migrate` / `pnpm db:rollback` | Schema migrations                                  |
+| `pnpm docker:up` / `:obs` / `:all`     | Start infrastructure by profile                    |
+| `pnpm docker:down` / `docker:reset`    | Stop / stop and wipe volumes                       |
+| `pnpm seed`                            | Generate deterministic synthetic data              |
 
 ---
 
@@ -298,30 +298,30 @@ docker compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-se
 
 ## 8. Service endpoints
 
-| Service | URL | Notes |
-| --- | --- | --- |
-| Fraud API | http://localhost:3000 | Hot path — authorization scoring |
-| Fraud API — OpenAPI | http://localhost:3000/docs | Swagger UI |
-| Fraud API — metrics | http://localhost:3000/metrics | Prometheus scrape target |
-| Review API | http://localhost:3001 | Cold path — cases, transactions, models |
-| Dashboard | http://localhost:5173 | React operations dashboard |
-| Prometheus | http://localhost:9090 | `observability` profile |
-| Grafana | http://localhost:3030 | `observability` profile. Default login in `.env.example` |
-| PostgreSQL | localhost:5432 | |
-| Redis | localhost:6379 | |
-| Kafka | localhost:9092 | |
+| Service             | URL                           | Notes                                                    |
+| ------------------- | ----------------------------- | -------------------------------------------------------- |
+| Fraud API           | http://localhost:3000         | Hot path — authorization scoring                         |
+| Fraud API — OpenAPI | http://localhost:3000/docs    | Swagger UI                                               |
+| Fraud API — metrics | http://localhost:3000/metrics | Prometheus scrape target                                 |
+| Review API          | http://localhost:3001         | Cold path — cases, transactions, models                  |
+| Dashboard           | http://localhost:5173         | React operations dashboard                               |
+| Prometheus          | http://localhost:9090         | `observability` profile                                  |
+| Grafana             | http://localhost:3030         | `observability` profile. Default login in `.env.example` |
+| PostgreSQL          | localhost:5432                |                                                          |
+| Redis               | localhost:6379                |                                                          |
+| Kafka               | localhost:9092                |                                                          |
 
 ---
 
 ## 9. Troubleshooting
 
-| Symptom | Likely cause | Fix |
-| --- | --- | --- |
-| `docker: command not found` | GAP-001 unresolved | §2 |
-| Machine freezes / heavy swapping under load | Docker unconstrained | Apply `.wslconfig` from §2.4, then `wsl --shutdown` |
-| Kafka container restarts repeatedly | Insufficient memory for the JVM | Raise `memory` in `.wslconfig`, or stop the `observability` profile while developing |
-| `EADDRINUSE` on 3000/5432/6379/9092 | Port taken by another process | `netstat -ano \| findstr :3000`, then stop the owner |
-| Integration tests fail with connection refused | `core` profile not running | `pnpm docker:up`, wait for health checks |
-| Load-test latency is wildly inconsistent | k6 competing with the system under test for CPU | Expected on this hardware — see DEVELOPMENT_ENVIRONMENT.md §5.2. Do not report such a run without the caveat |
-| `C:` fills up | Docker data still on `C:` | §2.3 |
-| pnpm reports missing workspace package | Stale install | `pnpm install --force` |
+| Symptom                                        | Likely cause                                    | Fix                                                                                                          |
+| ---------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `docker: command not found`                    | GAP-001 unresolved                              | §2                                                                                                           |
+| Machine freezes / heavy swapping under load    | Docker unconstrained                            | Apply `.wslconfig` from §2.4, then `wsl --shutdown`                                                          |
+| Kafka container restarts repeatedly            | Insufficient memory for the JVM                 | Raise `memory` in `.wslconfig`, or stop the `observability` profile while developing                         |
+| `EADDRINUSE` on 3000/5432/6379/9092            | Port taken by another process                   | `netstat -ano \| findstr :3000`, then stop the owner                                                         |
+| Integration tests fail with connection refused | `core` profile not running                      | `pnpm docker:up`, wait for health checks                                                                     |
+| Load-test latency is wildly inconsistent       | k6 competing with the system under test for CPU | Expected on this hardware — see DEVELOPMENT_ENVIRONMENT.md §5.2. Do not report such a run without the caveat |
+| `C:` fills up                                  | Docker data still on `C:`                       | §2.3                                                                                                         |
+| pnpm reports missing workspace package         | Stale install                                   | `pnpm install --force`                                                                                       |

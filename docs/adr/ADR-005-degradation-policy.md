@@ -14,17 +14,17 @@ system, the choice between failing open (approve when uncertain) and failing clo
 (reject when uncertain) is a **business and security trade-off with real money and real
 customers on either side**.
 
-- **Fail open** — a fraud outage becomes a fraud *window*. Attackers probe for exactly
+- **Fail open** — a fraud outage becomes a fraud _window_. Attackers probe for exactly
   this, and an outage that reliably produces approvals is an incentive to cause outages.
 - **Fail closed** — a cache hiccup declines legitimate customers. At payment scale, a
   few minutes of blanket declines is a serious commercial and reputational event, and it
   converts a partial failure into a total one.
 
 A single global policy is wrong because the dependencies are not equivalent. Losing
-Redis costs us *signal quality*. Losing PostgreSQL costs us *the audit record*. Those
+Redis costs us _signal quality_. Losing PostgreSQL costs us _the audit record_. Those
 should not produce the same behaviour.
 
-The decision must also be *visible*: a degraded decision that looks identical to a
+The decision must also be _visible_: a degraded decision that looks identical to a
 healthy one is a silent failure, which is worse than either policy.
 
 ## Decision
@@ -34,19 +34,19 @@ Every degraded decision is explicitly flagged, persisted and exported as a metri
 
 ### Policy table
 
-| Dependency | Capability lost | Policy | Behaviour |
-| --- | --- | --- | --- |
-| **Redis** | Behavioural features (velocity, aggregates, history) | **Cautious-open** | Score using transaction-intrinsic rules only, using each feature's declared default. Widen the `REVIEW` band by lowering the `BLOCK` threshold and the `ALLOW` ceiling. Flag `degraded`, reason `FEATURES_UNAVAILABLE` |
-| **ML provider** | Learned risk probability | **Fallback** | Circuit breaker opens, `RuleBasedScoringProvider` takes over. Rules are a complete scorer, so signal is reduced, not absent. Flag `degraded`, reason `ML_UNAVAILABLE` |
-| **Kafka** | Async propagation | **Invisible** | Hot path never touched Kafka. Outbox rows accumulate; relay retries with backoff and drains on recovery. Not a degraded decision |
-| **PostgreSQL** | Durable record of the decision | **Fail closed** | Return `503` with `Retry-After`. Do **not** return a decision |
-| **`fraud-api` instance** | Capacity | **Transparent** | Health check ejects it at the gateway; stateless, so traffic simply moves |
-| **`event-worker`** | Cold-path processing | **Deferred** | Lag grows, hot path unaffected, resumes from committed offsets |
-| **Overload** | Ability to meet the latency budget | **Shed** | Rate limit at the gateway; shed above a concurrency ceiling with `429` and `Retry-After` |
+| Dependency               | Capability lost                                      | Policy            | Behaviour                                                                                                                                                                                                              |
+| ------------------------ | ---------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Redis**                | Behavioural features (velocity, aggregates, history) | **Cautious-open** | Score using transaction-intrinsic rules only, using each feature's declared default. Widen the `REVIEW` band by lowering the `BLOCK` threshold and the `ALLOW` ceiling. Flag `degraded`, reason `FEATURES_UNAVAILABLE` |
+| **ML provider**          | Learned risk probability                             | **Fallback**      | Circuit breaker opens, `RuleBasedScoringProvider` takes over. Rules are a complete scorer, so signal is reduced, not absent. Flag `degraded`, reason `ML_UNAVAILABLE`                                                  |
+| **Kafka**                | Async propagation                                    | **Invisible**     | Hot path never touched Kafka. Outbox rows accumulate; relay retries with backoff and drains on recovery. Not a degraded decision                                                                                       |
+| **PostgreSQL**           | Durable record of the decision                       | **Fail closed**   | Return `503` with `Retry-After`. Do **not** return a decision                                                                                                                                                          |
+| **`fraud-api` instance** | Capacity                                             | **Transparent**   | Health check ejects it at the gateway; stateless, so traffic simply moves                                                                                                                                              |
+| **`event-worker`**       | Cold-path processing                                 | **Deferred**      | Lag grows, hot path unaffected, resumes from committed offsets                                                                                                                                                         |
+| **Overload**             | Ability to meet the latency budget                   | **Shed**          | Rate limit at the gateway; shed above a concurrency ceiling with `429` and `Retry-After`                                                                                                                               |
 
 ### Why PostgreSQL is the sole fail-closed case
 
-Redis loss degrades *how well* we decide. PostgreSQL loss means we cannot record *that*
+Redis loss degrades _how well_ we decide. PostgreSQL loss means we cannot record _that_
 we decided. For a financial system, an unrecorded decision is unauditable and
 irreproducible: we could not explain it to a customer, an analyst or an auditor, and the
 transaction would be invisible to every downstream process. Returning `503` — an honest
@@ -84,14 +84,14 @@ Non-negotiable, because a silent degradation is the worst of both policies:
 
 ### Resilience patterns applied
 
-| Pattern | Applied to | Configuration |
-| --- | --- | --- |
-| Timeout | Every external call | Redis 20 ms · ML 30 ms · Postgres 100 ms. All below the stage budgets in ADR-003 |
-| Circuit breaker | ML provider | Opens after 5 consecutive failures or a 50% error rate over 20 requests; half-open probe after 10 s |
-| Retry | **Cold path only** | Exponential backoff with full jitter, max 3 attempts. **No retries on the hot path** — a retry inside a 40 ms budget consumes it |
-| Bulkhead | Connection pools | Separate pools for hot path and cold path; `review-api` is a separate process |
-| Rate limiting | Gateway | Per-client token bucket |
-| Load shedding | `fraud-api` | Concurrency ceiling; `429` beyond it |
+| Pattern         | Applied to          | Configuration                                                                                                                    |
+| --------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Timeout         | Every external call | Redis 20 ms · ML 30 ms · Postgres 100 ms. All below the stage budgets in ADR-003                                                 |
+| Circuit breaker | ML provider         | Opens after 5 consecutive failures or a 50% error rate over 20 requests; half-open probe after 10 s                              |
+| Retry           | **Cold path only**  | Exponential backoff with full jitter, max 3 attempts. **No retries on the hot path** — a retry inside a 40 ms budget consumes it |
+| Bulkhead        | Connection pools    | Separate pools for hot path and cold path; `review-api` is a separate process                                                    |
+| Rate limiting   | Gateway             | Per-client token bucket                                                                                                          |
+| Load shedding   | `fraud-api`         | Concurrency ceiling; `429` beyond it                                                                                             |
 
 **On retries.** Retrying a hot-path call is almost always wrong here: the budget does not
 allow it, and retrying into a struggling dependency is how a slowdown becomes an outage

@@ -14,7 +14,7 @@ not violated by a single bad decision; they are violated by accumulation. A sync
 database call added "just for this one thing", a logging call that awaits a flush, an
 extra service hop for tidiness — each is individually defensible and collectively fatal.
 
-This is the most likely way for the project to fail (RISK-004), and it is a *process*
+This is the most likely way for the project to fail (RISK-004), and it is a _process_
 risk as much as a design one: the pressure to add hot-path work arrives later, during
 feature development, when the architecture document is no longer being read.
 
@@ -30,17 +30,17 @@ has enumerated rules enforced by automated test.**
 
 Permitted operations, exhaustively:
 
-| # | Operation | Store | Budget |
-| --- | --- | --- | --- |
-| 1 | Authenticate + authorize | in-process | 2 ms |
-| 2 | Schema validation | in-process | 1 ms |
-| 3 | Idempotency check | Redis | included in 8 ms |
-| 4 | Feature vector fetch (one pipelined call) | Redis | 8 ms |
-| 5 | Rule evaluation | in-process, pure | 5 ms |
-| 6 | Scoring provider | in-process (stub/rules) or HTTP (ML) | 15 ms |
-| 7 | Score combination + policy decision | in-process, pure | 2 ms |
-| 8 | Decision + outbox write, one transaction | PostgreSQL | 7 ms |
-| | **Total service budget** | | **40 ms** |
+| #   | Operation                                 | Store                                | Budget           |
+| --- | ----------------------------------------- | ------------------------------------ | ---------------- |
+| 1   | Authenticate + authorize                  | in-process                           | 2 ms             |
+| 2   | Schema validation                         | in-process                           | 1 ms             |
+| 3   | Idempotency check                         | Redis                                | included in 8 ms |
+| 4   | Feature vector fetch (one pipelined call) | Redis                                | 8 ms             |
+| 5   | Rule evaluation                           | in-process, pure                     | 5 ms             |
+| 6   | Scoring provider                          | in-process (stub/rules) or HTTP (ML) | 15 ms            |
+| 7   | Score combination + policy decision       | in-process, pure                     | 2 ms             |
+| 8   | Decision + outbox write, one transaction  | PostgreSQL                           | 7 ms             |
+|     | **Total service budget**                  |                                      | **40 ms**        |
 
 **Prohibited on the hot path — no exceptions without a superseding ADR:**
 
@@ -63,7 +63,7 @@ its own resource envelope. May retry, may lag, may be slow.
 A convention that is not checked is a convention that decays. Therefore:
 
 1. **Architecture test** — an automated test asserts that the `fraud-api` scoring module
-   has no import path reaching a PostgreSQL *read* repository or a Kafka *consumer*.
+   has no import path reaching a PostgreSQL _read_ repository or a Kafka _consumer_.
    Violations fail CI.
 2. **Budget assertion** — the server-side `fraud_score_duration_seconds` histogram is
    asserted against the 40 ms p99 budget in the integration suite, so a regression is

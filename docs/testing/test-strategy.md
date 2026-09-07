@@ -77,7 +77,7 @@ and TTL behaviour, Kafka serialisation and consumer-group semantics, migration
 correctness, transaction boundaries including outbox atomicity, connection-pool
 behaviour under concurrency.
 
-> A mock of Redis returns what we *believe* Redis returns. Half the bugs in this layer
+> A mock of Redis returns what we _believe_ Redis returns. Half the bugs in this layer
 > live in the gap between that belief and reality.
 
 ### 3.3 Contract — `CT-`
@@ -122,18 +122,18 @@ reflected in queries; the degraded path end to end.
 **Every row of the ADR-005 policy table has a test.** A degradation policy that is written
 down but not exercised is a hypothesis.
 
-| Test | Injected failure | Asserts |
-| --- | --- | --- |
-| `RT-REDIS-001` | Redis stopped | Decisions still returned; `degraded` flag set; `FEATURES_UNAVAILABLE`; widened `REVIEW` band |
-| `RT-ML-001` | ML service stopped / slow | Breaker opens; rule fallback; `degraded` flag; latency budget held |
-| `RT-KAFKA-001` | Kafka stopped during load | **Zero authorization failures**; outbox accumulates; full drain on recovery |
-| `RT-PG-001` | PostgreSQL stopped | `503` returned — **fail closed**, no undocumented decision |
-| `RT-INST-001` | One `fraud-api` instance killed | Traffic moves; no sustained error spike |
-| `RT-BULK-001` | Heavy analyst query load | Authorization p99 **unaffected** (NFR-007) |
-| `RT-DUP-001` | Same Kafka message delivered twice | One case, no double-counted features (RISK-005) |
-| `RT-SLOW-001` | Dependency latency injected | Timeouts fire; no cascade; no retry storm |
-| `RT-MALFORM-001` | Malformed message on a topic | Routed to DLQ; consumer continues |
-| `RT-OVERLOAD-001` | Load beyond the shedding ceiling | `429` with `Retry-After`; served requests still meet the budget |
+| Test              | Injected failure                   | Asserts                                                                                      |
+| ----------------- | ---------------------------------- | -------------------------------------------------------------------------------------------- |
+| `RT-REDIS-001`    | Redis stopped                      | Decisions still returned; `degraded` flag set; `FEATURES_UNAVAILABLE`; widened `REVIEW` band |
+| `RT-ML-001`       | ML service stopped / slow          | Breaker opens; rule fallback; `degraded` flag; latency budget held                           |
+| `RT-KAFKA-001`    | Kafka stopped during load          | **Zero authorization failures**; outbox accumulates; full drain on recovery                  |
+| `RT-PG-001`       | PostgreSQL stopped                 | `503` returned — **fail closed**, no undocumented decision                                   |
+| `RT-INST-001`     | One `fraud-api` instance killed    | Traffic moves; no sustained error spike                                                      |
+| `RT-BULK-001`     | Heavy analyst query load           | Authorization p99 **unaffected** (NFR-007)                                                   |
+| `RT-DUP-001`      | Same Kafka message delivered twice | One case, no double-counted features (RISK-005)                                              |
+| `RT-SLOW-001`     | Dependency latency injected        | Timeouts fire; no cascade; no retry storm                                                    |
+| `RT-MALFORM-001`  | Malformed message on a topic       | Routed to DLQ; consumer continues                                                            |
+| `RT-OVERLOAD-001` | Load beyond the shedding ceiling   | `429` with `Retry-After`; served requests still meet the budget                              |
 
 ### 3.7 Security — `ST-`
 
@@ -169,17 +169,17 @@ the gate.**
 
 ## 5. CI enforcement
 
-| Stage | Runs | Blocks merge |
-| --- | --- | --- |
-| Format, lint, typecheck | Every PR | Yes |
-| Unit | Every PR | Yes |
-| Architecture | Every PR | Yes |
-| Integration + contract | Every PR | Yes |
-| Build | Every PR | Yes |
-| Security (audit + secret scan) | Every PR | Yes |
-| E2E | Merge to `develop` | Yes |
-| Resilience | Nightly and before a phase gate | Reported |
-| Load | Manual, Phase 9 | Reported |
+| Stage                          | Runs                            | Blocks merge |
+| ------------------------------ | ------------------------------- | ------------ |
+| Format, lint, typecheck        | Every PR                        | Yes          |
+| Unit                           | Every PR                        | Yes          |
+| Architecture                   | Every PR                        | Yes          |
+| Integration + contract         | Every PR                        | Yes          |
+| Build                          | Every PR                        | Yes          |
+| Security (audit + secret scan) | Every PR                        | Yes          |
+| E2E                            | Merge to `develop`              | Yes          |
+| Resilience                     | Nightly and before a phase gate | Reported     |
+| Load                           | Manual, Phase 9                 | Reported     |
 
 Load and resilience suites are not on the PR path — they need the full stack and minutes
 of runtime, and on this hardware they would be unreliable in a shared runner. They gate
@@ -189,10 +189,10 @@ phases instead of commits.
 
 ## 6. What we are not doing, and why
 
-| Not doing | Why |
-| --- | --- |
-| Chasing a coverage percentage | Coverage measures execution, not verification. A suite at 95% that asserts nothing meaningful is worse than 60% that tests the decision boundaries — it produces false confidence |
-| Mutation testing | Valuable, and out of budget for a three-person term (CON-001) |
-| E2E for logic that could be unit-tested | Slow, flaky, poor localisation. If it can be a pure function, it should be, and then it should be unit-tested |
-| Testing framework or library behaviour | We test our code, not NestJS's |
-| Snapshot tests for decision output | They lock in current behaviour without expressing intent, and get blindly regenerated when they break |
+| Not doing                               | Why                                                                                                                                                                               |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chasing a coverage percentage           | Coverage measures execution, not verification. A suite at 95% that asserts nothing meaningful is worse than 60% that tests the decision boundaries — it produces false confidence |
+| Mutation testing                        | Valuable, and out of budget for a three-person term (CON-001)                                                                                                                     |
+| E2E for logic that could be unit-tested | Slow, flaky, poor localisation. If it can be a pure function, it should be, and then it should be unit-tested                                                                     |
+| Testing framework or library behaviour  | We test our code, not NestJS's                                                                                                                                                    |
+| Snapshot tests for decision output      | They lock in current behaviour without expressing intent, and get blindly regenerated when they break                                                                             |

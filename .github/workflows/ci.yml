@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: '22'
-  PNPM_VERSION: '9'
+  NODE_VERSION: "22"
+  PNPM_VERSION: "9"
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -110,7 +110,7 @@ jobs:
           POSTGRES_DB: fraudguard_test
           POSTGRES_USER: fraudguard
           POSTGRES_PASSWORD: test_only_not_a_secret
-        ports: ['5432:5432']
+        ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U fraudguard"
           --health-interval 10s
@@ -119,7 +119,7 @@ jobs:
 
       redis:
         image: redis:7-alpine
-        ports: ['6379:6379']
+        ports: ["6379:6379"]
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s
@@ -192,7 +192,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0        # full history — gitleaks scans commits, not just the tree
+          fetch-depth: 0 # full history — gitleaks scans commits, not just the tree
 
       - uses: pnpm/action-setup@v4
         with:
