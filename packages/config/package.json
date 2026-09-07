@@ -1,0 +1,18 @@
+{
+  "name": "@fraudguard/config",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Typed, validated environment configuration. Fails fast and loudly on startup rather than surfacing a missing variable as a runtime NaN deep in the hot path.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}
