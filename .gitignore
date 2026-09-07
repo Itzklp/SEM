@@ -1,0 +1,83 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.yarn/
+
+# Build output
+dist/
+build/
+out/
+*.tsbuildinfo
+.next/
+.turbo/
+
+# Environment and secrets — NEVER COMMIT
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials.json
+
+# Test and coverage output
+coverage/
+.nyc_output/
+junit.xml
+test-results/
+!docs/testing/test-results/
+playwright-report/
+
+# Load-test raw output (summaries are committed under docs/testing/test-results/)
+tests/load/output/
+*.k6-summary.json
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Python (ml/)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+mlruns/
+.mlflow/
+
+# ML artefacts — models are versioned through the registry, not Git.
+# Large binaries do not belong in history.
+ml/models/*.pkl
+ml/models/*.joblib
+ml/models/*.onnx
+ml/models/*.bin
+!ml/models/.gitkeep
+!ml/models/README.md
+
+# Datasets — generated from a seed, never committed
+ml/datasets/*.csv
+ml/datasets/*.parquet
+!ml/datasets/.gitkeep
+!ml/datasets/README.md
+
+# Docker local state
+infrastructure/docker/volumes/
+*.pid
+
+# IDE — shared recommendations are committed, personal settings are not
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.shared.json
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
