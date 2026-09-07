@@ -3,8 +3,13 @@
   "compilerOptions": {
     "target": "ES2023",
     "lib": ["ES2023"],
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    // CommonJS rather than NodeNext: matches the NestJS/Jest ecosystem this
+    // project builds on and avoids the NodeNext requirement to write ".js"
+    // extensions on relative ".ts" imports. Revisit only with a concrete
+    // reason (e.g. ESM-only dependency) — this is a deliberate simplicity
+    // trade-off, not an oversight.
+    "module": "CommonJS",
+    "moduleResolution": "Node",
 
     // --- Strictness -------------------------------------------------------
     // Every flag below is on deliberately. CONTRIBUTING.md prohibits `any`

@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "isolatedModules": true,
+    "types": ["jest", "node"]
+  },
+  "include": ["packages/**/*.ts", "tests/**/*.ts"],
+  // Override tsconfig.base.json's exclude, which drops *.test.ts/*.spec.ts —
+  // correct for a build tsconfig, wrong here since this IS the test project.
+  "exclude": ["node_modules", "dist", "coverage"]
+}

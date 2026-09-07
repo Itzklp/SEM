@@ -24,7 +24,13 @@ export default tseslint.config(
   {
     languageOptions: {
       parserOptions: {
-        projectService: true,
+        // Explicit project list rather than `projectService: true`: the
+        // service auto-discovers a tsconfig per file via each package's
+        // `include`, which excludes *.test.ts (build tsconfigs must not
+        // include tests — see packages/*/tsconfig.json). tsconfig.test.json
+        // covers both source and test files in one project, so every file
+        // resolves.
+        project: ['./tsconfig.test.json'],
         tsconfigRootDir: import.meta.dirname,
       },
     },
@@ -44,6 +50,11 @@ export default tseslint.config(
       '@typescript-eslint/require-await': 'error',
       '@typescript-eslint/await-thenable': 'error',
 
+      // Interpolating a number (e.g. a score, a threshold) into a message
+      // string is safe and common in this codebase's error messages —
+      // the default rule flags it as if it were an unsafe `object`.
+      '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
+
       '@typescript-eslint/consistent-type-imports': [
         'error',
         { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
@@ -56,8 +67,7 @@ export default tseslint.config(
       'import/order': [
         'error',
         {
-          groups: ['builtin', 'external', 'internal', 'parent', 'sibling', 'index'],
-          pathGroups: [{ pattern: '@fraudguard/**', group: 'internal' }],
+          groups: ['builtin', 'external', 'parent', 'sibling', 'index'],
           'newlines-between': 'always',
           alphabetize: { order: 'asc', caseInsensitive: true },
         },

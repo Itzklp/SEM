@@ -1,8 +1,13 @@
 {
-  "extends": "./tsconfig.base.json",
-  "compilerOptions": {
-    "noEmit": true
-  },
-  "include": ["scripts/**/*.ts"],
-  "exclude": ["node_modules", "dist", "coverage"]
+  // Solution-style aggregator: no files of its own, just the graph of
+  // buildable projects. `tsc -b` on this file builds/typechecks every
+  // workspace package in dependency order in one command. Add a new
+  // package here as it's created (Phase 3+: persistence, messaging,
+  // feature-store, testkit).
+  "files": [],
+  "references": [
+    { "path": "packages/domain" },
+    { "path": "packages/config" },
+    { "path": "packages/contracts" }
+  ]
 }
