@@ -1,6 +1,27 @@
 import { z } from 'zod';
 
 /**
+ * `z.coerce.boolean()` is a trap for env vars: it just calls `Boolean(value)`,
+ * and `Boolean("false")` is `true` — every non-empty string is truthy. An
+ * env var explicitly set to `"false"` would silently coerce to `true`. This
+ * preprocesses the actual string content instead, case-insensitively, so
+ * `"false"`/`"FALSE"`/`"0"` all mean false and anything else falls through
+ * to the (real, non-string) boolean schema for a clear validation error
+ * rather than a silent wrong answer.
+ */
+function booleanEnv(defaultValue: boolean) {
+  return z
+    .preprocess((val) => {
+      if (typeof val !== 'string') return val;
+      const normalised = val.trim().toLowerCase();
+      if (normalised === 'true' || normalised === '1') return true;
+      if (normalised === 'false' || normalised === '0') return false;
+      return val;
+    }, z.boolean())
+    .default(defaultValue);
+}
+
+/**
  * Schema over the RAW process.env shape. Every variable here must also
  * appear in `.env.example` — that file is the human-facing reference, this
  * schema is what's actually enforced at process startup.
@@ -16,7 +37,7 @@ export const rawEnvSchema = z.object({
   // --- Runtime -------------------------------------------------------------
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
-  LOG_PRETTY: z.coerce.boolean().default(false),
+  LOG_PRETTY: booleanEnv(false),
 
   // --- Services --------------------------------------------------------------
   FRAUD_API_PORT: z.coerce.number().int().positive().default(3000),
@@ -30,7 +51,7 @@ export const rawEnvSchema = z.object({
   POSTGRES_DB: z.string().min(1).default('fraudguard'),
   POSTGRES_USER: z.string().min(1).default('fraudguard'),
   POSTGRES_PASSWORD: z.string().min(1),
-  POSTGRES_SSL: z.coerce.boolean().default(false),
+  POSTGRES_SSL: booleanEnv(false),
   POSTGRES_POOL_HOT_MAX: z.coerce.number().int().positive().default(10),
   POSTGRES_POOL_COLD_MAX: z.coerce.number().int().positive().default(5),
   POSTGRES_STATEMENT_TIMEOUT_MS: z.coerce.number().int().positive().default(100),
@@ -48,7 +69,7 @@ export const rawEnvSchema = z.object({
   KAFKA_BROKERS: z.string().min(1).default('localhost:9092'),
   KAFKA_CLIENT_ID: z.string().min(1).default('fraudguard'),
   KAFKA_CONSUMER_GROUP: z.string().min(1).default('fraudguard-workers'),
-  KAFKA_SSL: z.coerce.boolean().default(false),
+  KAFKA_SSL: booleanEnv(false),
   KAFKA_SASL_MECHANISM: z.string().default(''),
   KAFKA_SASL_USERNAME: z.string().default(''),
   KAFKA_SASL_PASSWORD: z.string().default(''),
@@ -89,9 +110,9 @@ export const rawEnvSchema = z.object({
   MAX_CONCURRENT_REQUESTS: z.coerce.number().int().positive().default(500),
 
   // --- Observability ------------------------------------------------------------
-  METRICS_ENABLED: z.coerce.boolean().default(true),
+  METRICS_ENABLED: booleanEnv(true),
   METRICS_PATH: z.string().min(1).default('/metrics'),
-  OTEL_ENABLED: z.coerce.boolean().default(true),
+  OTEL_ENABLED: booleanEnv(true),
   OTEL_SERVICE_NAME: z.string().min(1).default('fraud-api'),
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().default('http://localhost:4318'),
   OTEL_TRACES_SAMPLER_ARG: z.coerce.number().min(0).max(1).default(0.1),
