@@ -153,6 +153,21 @@ Copy-Item .env.example .env
 `.env` is git-ignored and **must never be committed**. `.env.example` contains only
 placeholder values and is the authoritative list of every variable the system reads.
 
+Fill in real local values for the credentialed ones (`POSTGRES_PASSWORD`,
+`GRAFANA_ADMIN_PASSWORD`, `AUTH_JWT_SECRET`, `K6_API_KEY`) — don't leave the
+`CHANGE_ME_*` placeholders in place:
+
+```powershell
+node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
+```
+
+`CREDENTIALS.md` (repo root, also git-ignored) is a standing inventory of every
+credential in use — which service, what value, where it's consumed, and whether it's
+even active (Redis and Kafka are deliberately unauthenticated locally — network-isolated
+by design, see `docs/security/threat-model.md` §3.4). Keep it in sync when you rotate
+anything; **verify `git check-ignore -v CREDENTIALS.md` matches before ever running a
+broad `git add`.**
+
 ---
 
 ## 4. Starting the stack
