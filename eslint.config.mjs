@@ -116,5 +116,39 @@ export default tseslint.config(
     },
   },
 
+  // Integration/E2E/resilience tests exercise real framework internals —
+  // Fastify's `.inject()`/`.json()` and loosely-typed third-party response
+  // shapes are inherently `any` at the type level. Unit and contract tests
+  // work entirely with our own typed domain code and keep the stricter
+  // default deliberately.
+  {
+    files: ['tests/integration/**/*.ts', 'tests/e2e/**/*.ts', 'tests/resilience/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+    },
+  },
+
+  // NestJS module classes are conventionally empty — all they do is carry
+  // @Module() metadata for the DI container. Flagging that as "extraneous"
+  // would fight the framework's own idiom on every single module file.
+  {
+    files: ['**/*.module.ts'],
+    rules: {
+      '@typescript-eslint/no-extraneous-class': 'off',
+    },
+  },
+
+  // Standalone CLI entrypoints (migration runner, etc.) — console output
+  // IS the interface here, not a debugging leftover.
+  {
+    files: ['**/migrate.ts', '**/rollback.ts', 'scripts/**/*.ts'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
+
   prettier,
 );
