@@ -1,0 +1,28 @@
+{
+  "name": "@fraudguard/persistence",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PostgreSQL schema, migrations and repositories — durable state, never read on the hot path (ADR-003).",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "migrate": "ts-node -r tsconfig-paths/register --transpile-only src/migrate.ts",
+    "rollback": "ts-node -r tsconfig-paths/register --transpile-only src/rollback.ts"
+  },
+  "dependencies": {
+    "@fraudguard/config": "workspace:*",
+    "@fraudguard/domain": "workspace:*",
+    "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.36.4",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10",
+    "drizzle-kit": "^0.28.1",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.7.2"
+  }
+}
