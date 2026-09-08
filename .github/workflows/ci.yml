@@ -145,6 +145,10 @@ jobs:
           POSTGRES_DB: fraudguard_test
           POSTGRES_USER: fraudguard
           POSTGRES_PASSWORD: test_only_not_a_secret
+          # loadConfig() requires this (packages/config: no default, min 32
+          # chars) even though migrate.ts never signs or verifies a token —
+          # it's one process-wide config load. Test-only value, 40 chars.
+          AUTH_JWT_SECRET: test_only_jwt_secret_not_a_real_secret_ok
 
       # Kafka-dependent tests use Testcontainers rather than a service
       # container, so they control broker lifecycle for outage scenarios.
@@ -156,6 +160,7 @@ jobs:
           POSTGRES_USER: fraudguard
           POSTGRES_PASSWORD: test_only_not_a_secret
           REDIS_HOST: localhost
+          AUTH_JWT_SECRET: test_only_jwt_secret_not_a_real_secret_ok
 
       - name: Contract tests
         run: pnpm test:contract

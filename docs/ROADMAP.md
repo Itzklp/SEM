@@ -115,31 +115,89 @@ never advertised to clients — full root-cause explanation in the report and in
 
 ---
 
-## Phase 3 — Transaction ingestion
+## Phase 3 — Transaction ingestion ✅ **COMPLETE**
 
 |                  |                                                                          |
 | ---------------- | ------------------------------------------------------------------------ |
 | **Goal**         | A validated, authenticated authorization request reaches a stub decision |
-| **Blocked by**   | Phase 1, Phase 2                                                         |
+| **Blocked by**   | ~~Phase 1, Phase 2~~ both complete                                       |
 | **Requirements** | FR-001, FR-015, FR-017                                                   |
 
-**Deliverables**
+**Delivered**
 
-- `apps/fraud-api` on NestJS + Fastify
-- `POST /api/v1/fraud/score` with full schema validation
-- Authentication and authorization; standard error responses
-- Idempotency by `transactionId`
-- Transaction lifecycle state machine wired
-- Nginx gateway with rate limiting
-- Structured Pino logging with `requestId` / `traceId` / `transactionId`
-- Swagger UI served
+- `apps/fraud-api` on NestJS + Fastify — the real pipeline: JWT auth
+  (`JwtAuthGuard`/`PrivilegesGuard`, FR-015) → Zod validation
+  (`ZodValidationPipe` against `packages/contracts`) → Redis idempotency
+  fast path → `PlaceholderScoringProvider` (Phase 3 stub, satisfies CON-005's
+  interface) → threshold `decide()` → persist (`packages/persistence`,
+  atomic transaction+decision write) → respond
+- `packages/persistence` — Drizzle schema for `transactions`/`decisions`
+  matching `data-model.md`, hand-rolled SQL migration runner (`pnpm
+db:migrate`/`db:rollback`), hot/cold connection pools (ADR-004 bulkhead)
+- `packages/feature-store` — Redis client + idempotency (this phase);
+  placeholder feature vector Phase 4 will extend without relocating
+- `packages/testkit` — seeded transaction generator (FR-018, partial — see
+  below) and a JWT test-token signer
+- `tests/architecture/hot-path.test.ts` — the ADR-003 enforcement test,
+  landed on schedule (D3's Phase 3 deliverable)
+- Full transaction lifecycle state machine actually driven end to end
+  (RECEIVED → VALIDATED → FEATURES_LOADED → SCORED → DECIDED), persisted
+  status reflecting the real outcome
+- Swagger UI served from the existing hand-authored `openapi.yaml`
+- Structured Pino logging (per-request `requestId`/`traceId` context is a
+  Phase 7 observability enhancement, not yet wired — logged honestly rather
+  than claimed)
 
-**Exit criteria**
+**Deliberately deferred:** the Nginx gateway. Rate limiting is satisfied at
+the application layer (`@fastify/rate-limit`, ADR-005's overload policy) for
+now; a gateway in front of `fraud-api` is infrastructure work with no new
+application behaviour behind it, and fits better alongside Phase 6+'s
+multi-service routing than as a solo addition here.
 
-- Valid request returns a decision; invalid request returns `400` naming the field, with no side effects
-- Unauthenticated → `401`; unauthorized → `403`
-- Duplicate `transactionId` returns the original decision
-- Integration tests pass against real infrastructure
+**Exit criteria — all verified against a live server and real infrastructure**
+
+- ✅ Valid, authenticated request → `200` with a decision (verified via
+  `curl` against a running instance, not only mocked)
+- ✅ Malformed request → `400` naming the offending field, **zero
+  persisted rows** (`IT-API-002`)
+- ✅ Unauthenticated → `401`; wrong privilege → `403` (`ST-001`, `ST-005`)
+- ✅ Duplicate `transactionId` → identical original decision (`IT-IDEM-001`)
+- ✅ Integration tests pass against real Postgres + Redis (7/7,
+  `tests/integration/fraud-api-scoring.integration.test.ts`)
+
+**Three real bugs found and fixed while getting there — not filed away, fixed and regression-tested:**
+
+1. **`z.coerce.boolean()` silently broken for every boolean env var.**
+   `Boolean("false")` is `true` in JS — `POSTGRES_SSL=false` was coercing to
+   `true`, and `pnpm db:migrate` failed against the non-SSL local Postgres
+   with "The server does not support SSL connections". Fixed with a proper
+   string-aware `booleanEnv()` preprocessor in `packages/config`; 7 new
+   regression tests lock in `"false"` → `false` for every boolean field.
+2. **`transitionTransaction()`'s return value was never captured.** Every
+   persisted transaction stayed at `status='RECEIVED'` regardless of how
+   far the pipeline actually got — the function validates _and returns_
+   the new status, and the return was discarded. Fixed in
+   `ScoringService`; the integration happy-path test now asserts
+   `status = 'DECIDED'` directly against the database.
+3. **CLI/dev scripts resolved workspace packages via stale compiled
+   `dist/`, not live source**, and never loaded `.env` at all. `ts-node`
+   resolves `@fraudguard/*` through each package's `main` field
+   (`dist/index.js`) — `pnpm db:migrate` was silently running Phase-1-era
+   compiled code. Fixed with `tsconfig-paths/register` (redirects to `src`
+   at runtime, matching what Jest's `moduleNameMapper` already did for
+   tests) plus a `.env`-loading preload (`apps/fraud-api/preload.js`,
+   `packages/persistence`'s migration scripts) — ES import hoisting means
+   `dotenv.config()` has to run in a plain-JS `-r` preload, not inside
+   `main.ts` itself, or the whole `AppModule` import chain (which calls
+   `loadConfig()` eagerly) resolves before it does.
+
+**FR-018 status: partial.** The generator produces well-formed,
+deterministic transactions (`UT-GEN-001` verified) — sufficient for this
+phase's integration tests. The seven fraud-pattern generators (velocity,
+amount-anomaly, etc.) are meaningful once a feature store and rule engine
+exist to detect them against (Phase 4/5); building them now would mean
+testing against nothing. Tracked honestly in the traceability matrix as
+partial, not claimed complete.
 
 ---
 
