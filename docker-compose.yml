@@ -1,0 +1,233 @@
+# FraudGuard — local development infrastructure.
+#
+# Profiles (ADR-002/DEVELOPMENT_ENVIRONMENT.md §5.1 capacity constraint —
+# 4 cores / 7.86GB): bring up only what the current task needs.
+#
+#   core         PostgreSQL, Redis, Kafka (KRaft) — everyday development
+#   observability + Prometheus, Grafana — when working on metrics/dashboards or load testing
+#   apps         + fraud-api, event-worker, review-api — full containerised stack (Phase 3+)
+#
+# Usage: see package.json's docker:up / docker:up:obs / docker:up:all / docker:down.
+# Full rationale: docs/SETUP.md §4.
+
+name: fraudguard
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+networks:
+  fraudguard:
+    name: fraudguard
+
+volumes:
+  postgres_data:
+  redis_data:
+  kafka_data:
+  prometheus_data:
+  grafana_data:
+
+services:
+  # ===========================================================================
+  # CORE profile
+  # ===========================================================================
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: [core]
+    networks: [fraudguard]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fraudguard}
+      POSTGRES_USER: ${POSTGRES_USER:-fraudguard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+    # pg_stat_statements needs shared_preload_libraries at server start —
+    # CREATE EXTENSION alone (infrastructure/postgres/init.sql) is not
+    # sufficient. statement_timeout backstops POSTGRES_STATEMENT_TIMEOUT_MS
+    # at the server level, not just the application connection pool.
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - statement_timeout=5000
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fraudguard} -d ${POSTGRES_DB:-fraudguard}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    # DEVELOPMENT_ENVIRONMENT.md §5.1 estimated 300-500MB; measured figure
+    # replaces this in docs/testing/test-results/.
+    mem_limit: 512m
+    logging: *default-logging
+
+  redis:
+    image: redis:7-alpine
+    profiles: [core]
+    networks: [fraudguard]
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./infrastructure/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    # maxmemory 200mb (redis.conf) + container/process overhead headroom.
+    mem_limit: 256m
+    logging: *default-logging
+
+  kafka:
+    # Pinned exact version per CONTRIBUTING.md — never `latest`.
+    image: apache/kafka:3.9.0
+    profiles: [core]
+    networks: [fraudguard]
+    environment:
+      # --- KRaft: combined broker+controller, single node (ADR-001) -----------
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      # PLAINTEXT binds to 0.0.0.0 (normal — it has a real advertised
+      # entry below, so the wildcard bind never reaches config validation).
+      # CONTROLLER binds to the container's own hostname, not 0.0.0.0:
+      # apache/kafka's combined-node validation computes an "effective
+      # advertised" value for every listener in KAFKA_LISTENERS, falling
+      # back to its raw bind address for any listener NOT present in
+      # KAFKA_ADVERTISED_LISTENERS (correctly, CONTROLLER is not — it's
+      # reached via controller.quorum.voters, never advertised to
+      # clients). That fallback still fails the nonroutable-address check,
+      # so its bind address has to be routable too — "kafka" resolves to
+      # this container's own IP via Docker's embedded DNS.
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://kafka:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      # Single broker locally -> replication.factor must be 1 (ADR-001
+      # documented limitation: broker-loss durability not demonstrable here).
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      # Topics are created explicitly by kafka-init (create-topics.sh) with
+      # per-topic retention from the catalogue — auto-create would silently
+      # produce topics with the WRONG retention/partition config.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      # Bounded JVM heap — DEVELOPMENT_ENVIRONMENT.md §5.1: Kafka is the
+      # largest single memory consumer in the stack on this hardware.
+      KAFKA_HEAP_OPTS: "-Xmx768m -Xms768m"
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092",
+        ]
+      interval: 10s
+      timeout: 10s
+      # Kafka's JVM cold start is the slowest thing in the stack — generous
+      # retry budget rather than a false "unhealthy" during normal startup.
+      retries: 15
+      start_period: 30s
+    # Estimated 1.2-1.6GB (DEVELOPMENT_ENVIRONMENT.md §5.1); heap capped at
+    # 768MB above, limit leaves room for off-heap (page cache, metaspace).
+    mem_limit: 1200m
+    logging: *default-logging
+
+  kafka-init:
+    image: apache/kafka:3.9.0
+    profiles: [core]
+    networks: [fraudguard]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_TOPIC_PARTITIONS: ${KAFKA_TOPIC_PARTITIONS:-3}
+      KAFKA_TOPIC_REPLICATION_FACTOR: ${KAFKA_TOPIC_REPLICATION_FACTOR:-1}
+    volumes:
+      - ./infrastructure/kafka/create-topics.sh:/create-topics.sh:ro
+    entrypoint: ["/bin/sh", "/create-topics.sh"]
+    # Runs once and exits (docs/architecture/kafka-topics.md catalogue,
+    # made executable) — not a long-running service, so no healthcheck/mem_limit.
+    restart: "no"
+
+  # ===========================================================================
+  # OBSERVABILITY profile
+  # ===========================================================================
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    profiles: [observability]
+    networks: [fraudguard]
+    volumes:
+      - ./infrastructure/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # Short local retention — this is a development instance, not a
+      # production time-series store; Phase 9 load-test results are
+      # extracted into docs/testing/test-results/, not left to expire here.
+      - --storage.tsdb.retention.time=7d
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    mem_limit: 400m
+    logging: *default-logging
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    profiles: [observability]
+    networks: [fraudguard]
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set in .env}
+      # No public sign-up, no anonymous access — even for a local dev tool,
+      # default-open dashboards are an easy habit to carry into a
+      # less-careful moment later (NFR-008 posture, applied consistently).
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    ports:
+      - "${GRAFANA_PORT:-3030}:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infrastructure/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./infrastructure/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./infrastructure/monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboard-files:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    mem_limit: 300m
+    logging: *default-logging
+
+  # ===========================================================================
+  # APPS profile — populated from Phase 3 onward. Intentionally empty now:
+  # an empty profile is valid Compose and a no-op, which is preferable to a
+  # placeholder service that would need to be remembered and removed later.
+  # ===========================================================================

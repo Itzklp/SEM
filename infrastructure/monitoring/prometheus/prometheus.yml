@@ -1,0 +1,55 @@
+# FraudGuard — Prometheus scrape configuration.
+#
+# Phase 2 wires this up; the application-side metrics it scrapes (
+# transactions_total, fraud_decisions_total, etc. — docs/architecture/
+# ARCHITECTURE.md §"Observability") don't exist until Phase 7, and the
+# services themselves don't exist until Phase 3+. Targets below will show
+# as `down` until then — that is the correct, honest state for an
+# infrastructure-only phase, not a bug in this config.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    project: fraudguard
+    environment: local
+
+scrape_configs:
+  # Prometheus scraping itself — the one target guaranteed to be up,
+  # useful for verifying the Prometheus container itself is healthy.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # fraud-api: the hot path (Phase 3 for the service, Phase 7 for metrics).
+  - job_name: fraud-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["fraud-api:3000"]
+        labels:
+          service: fraud-api
+          path: hot
+
+  - job_name: review-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["review-api:3001"]
+        labels:
+          service: review-api
+          path: cold
+
+  - job_name: event-worker
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["event-worker:9100"]
+        labels:
+          service: event-worker
+          path: cold
+
+  - job_name: ml-service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["ml-service:8000"]
+        labels:
+          service: ml-service
+          path: hot

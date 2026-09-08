@@ -1,0 +1,15 @@
+# Points Grafana at the dashboards folder so every .json file there is
+# loaded automatically on start — dashboards are code, versioned in git,
+# never hand-built in the UI (docs/ROADMAP.md Phase 7 exit criterion).
+apiVersion: 1
+
+providers:
+  - name: FraudGuard
+    orgId: 1
+    folder: FraudGuard
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/provisioning/dashboard-files
