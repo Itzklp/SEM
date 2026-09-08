@@ -16,8 +16,8 @@ const tsJestTransform = {
   '^.+\\.tsx?$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.test.json' }],
 };
 
-/** @type {(displayName: string, roots: string[]) => Partial<import('@jest/types').Config.InitialProjectOptions>} */
-function baseProject(displayName, roots) {
+/** @type {(displayName: string, roots: string[], opts?: { needsEnv?: boolean }) => Partial<import('@jest/types').Config.InitialProjectOptions>} */
+function baseProject(displayName, roots, opts = {}) {
   return {
     displayName,
     testEnvironment: 'node',
@@ -28,7 +28,15 @@ function baseProject(displayName, roots) {
       '^@fraudguard/domain$': '<rootDir>/packages/domain/src/index.ts',
       '^@fraudguard/contracts$': '<rootDir>/packages/contracts/src/index.ts',
       '^@fraudguard/config$': '<rootDir>/packages/config/src/index.ts',
+      '^@fraudguard/feature-store$': '<rootDir>/packages/feature-store/src/index.ts',
+      '^@fraudguard/persistence$': '<rootDir>/packages/persistence/src/index.ts',
+      '^@fraudguard/testkit$': '<rootDir>/packages/testkit/src/index.ts',
     },
+    // Integration/E2E need real credentials (POSTGRES_PASSWORD,
+    // AUTH_JWT_SECRET, ...) to call loadConfig() against real
+    // infrastructure — loaded from .env locally; CI sets them as job env
+    // vars directly and this file is then a no-op (see jest.setup.integration.ts).
+    ...(opts.needsEnv ? { setupFiles: ['<rootDir>/jest.setup.integration.ts'] } : {}),
   };
 }
 
@@ -45,10 +53,10 @@ module.exports = {
       testMatch: ['**/*.test.ts'],
     },
     baseProject('architecture', ['<rootDir>/tests/architecture']),
-    baseProject('integration', ['<rootDir>/tests/integration']),
+    baseProject('integration', ['<rootDir>/tests/integration'], { needsEnv: true }),
     baseProject('contract', ['<rootDir>/tests/contract']),
-    baseProject('e2e', ['<rootDir>/tests/e2e']),
-    baseProject('resilience', ['<rootDir>/tests/resilience']),
+    baseProject('e2e', ['<rootDir>/tests/e2e'], { needsEnv: true }),
+    baseProject('resilience', ['<rootDir>/tests/resilience'], { needsEnv: true }),
   ],
   collectCoverageFrom: [
     'packages/*/src/**/*.ts',

@@ -8,6 +8,10 @@
   "references": [
     { "path": "packages/domain" },
     { "path": "packages/config" },
-    { "path": "packages/contracts" }
+    { "path": "packages/contracts" },
+    { "path": "packages/feature-store" },
+    { "path": "packages/persistence" },
+    { "path": "packages/testkit" },
+    { "path": "apps/fraud-api" }
   ]
 }

@@ -9,7 +9,7 @@
     "isolatedModules": true,
     "types": ["jest", "node"]
   },
-  "include": ["packages/**/*.ts", "tests/**/*.ts"],
+  "include": ["packages/**/*.ts", "apps/**/*.ts", "tests/**/*.ts", "jest.setup.integration.ts"],
   // Override tsconfig.base.json's exclude, which drops *.test.ts/*.spec.ts —
   // correct for a build tsconfig, wrong here since this IS the test project.
   "exclude": ["node_modules", "dist", "coverage"]
