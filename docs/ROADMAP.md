@@ -72,28 +72,46 @@ produces integration debt.
 
 ---
 
-## Phase 2 — Infrastructure
+## Phase 2 — Infrastructure ✅ **COMPLETE**
 
-|                |                                               |
-| -------------- | --------------------------------------------- |
-| **Goal**       | `pnpm docker:up` yields a healthy local stack |
-| **Blocked by** | **GAP-001 — Docker Desktop**                  |
+|                |                                                  |
+| -------------- | ------------------------------------------------ |
+| **Goal**       | `pnpm docker:up` yields a healthy local stack    |
+| **Blocked by** | ~~GAP-001 — Docker Desktop~~ resolved 2026-09-07 |
 
-**Deliverables**
+**Delivered**
 
-- `docker-compose.yml` with `core` / `observability` / `apps` profiles
-- Kafka in KRaft mode, single broker, explicit memory limit; topic bootstrap
-- PostgreSQL with an init script and the migration runner
-- Redis with `maxmemory` and an explicit eviction policy
-- Prometheus scrape configuration; Grafana with provisioned datasource and dashboards
+- `docker-compose.yml` with `core` / `observability` / `apps` profiles (`apps` empty by
+  design until Phase 3 — an empty profile is a valid no-op)
+- Kafka in KRaft mode, single broker, `KAFKA_HEAP_OPTS` capped at 768m, `mem_limit`
+  1200m; `kafka-init` bootstraps all 12 catalogue topics (6 + DLQs) with per-topic
+  retention from `docs/architecture/kafka-topics.md`
+- PostgreSQL with `infrastructure/postgres/init.sql` (pgcrypto, pg_stat_statements) —
+  app schema/migrations remain a Phase 3 `packages/persistence` deliverable, deliberately
+  not pulled forward
+- Redis with `maxmemory 200mb`, `allkeys-lru`, persistence off (derived state — ADR-002)
+- Prometheus scrape config (5 targets: self + the 4 not-yet-existing app services,
+  correctly showing `down`); Grafana with the Prometheus datasource and an
+  "Infrastructure Health" dashboard both provisioned with zero manual UI steps
 - Health checks and memory limits on every container
-- Measured startup time and resident memory of the full stack — replacing the estimates in DEVELOPMENT_ENVIRONMENT.md §5.1
 
-**Exit criteria**
+**Exit criteria — all verified, not assumed**
 
-- All containers healthy; stack survives restart
-- **Measured** total memory recorded and compared against the estimate
-- Documented recovery from a full reset
+- ✅ All 5 containers healthy (`docker compose ps`)
+- ✅ Stack survives restart: `docker compose restart postgres redis kafka` → all
+  re-reached `healthy`; Kafka's 12 topics confirmed still present afterward (volume
+  persistence, not just process survival)
+- ✅ Recovery from a full reset verified: `docker compose down -v` (removes all 5
+  volumes + network) → `docker compose --profile core up -d` → healthy again in 21s,
+  topics recreated cleanly
+- ✅ **Measured**, not estimated: startup time (28.4s core, ~45s full stack) and idle
+  memory (≈0.60 GB for 5 containers) — full report:
+  [docs/testing/test-results/phase2-infrastructure-report.md](../testing/test-results/phase2-infrastructure-report.md)
+
+**One real issue found and fixed:** `apache/kafka`'s combined KRaft mode rejected
+`0.0.0.0` as the `CONTROLLER` listener's bind address, even though that listener is
+never advertised to clients — full root-cause explanation in the report and inline in
+`docker-compose.yml`.
 
 ---
 

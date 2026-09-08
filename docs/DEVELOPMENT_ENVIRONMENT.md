@@ -154,22 +154,33 @@ This section exists because the target NFRs were written before the hardware was
 The numbers below are **estimates derived from component defaults**, not measurements —
 they are labelled as such, and Phase 9 replaces them with measured values.
 
-### 5.1 Estimated resident memory of the full local stack
+### 5.1 Resident memory of the full local stack
 
-| Component                                        | Estimated RSS    | Basis                                                 |
-| ------------------------------------------------ | ---------------- | ----------------------------------------------------- |
-| Kafka (KRaft, 1 broker)                          | 1.2–1.6 GB       | JVM heap 1 GB + off-heap; ESTIMATED                   |
-| PostgreSQL 16                                    | 300–500 MB       | default `shared_buffers` 128 MB + backends; ESTIMATED |
-| Redis 7                                          | 80–150 MB        | small keyspace; ESTIMATED                             |
-| Prometheus                                       | 250–400 MB       | 15 s scrape, short retention; ESTIMATED               |
-| Grafana                                          | 150–250 MB       | ESTIMATED                                             |
-| WSL2 VM overhead                                 | 300–500 MB       | ESTIMATED                                             |
-| `fraud-api` (per instance)                       | 120–200 MB       | Node.js baseline + heap; ESTIMATED                    |
-| `event-worker`                                   | 150–250 MB       | ESTIMATED                                             |
-| `review-api`                                     | 100–150 MB       | ESTIMATED                                             |
-| k6 at 2 000 TPS                                  | 200–400 MB       | ESTIMATED                                             |
-| **Total (1 API instance, full observability)**   | **≈ 2.9–4.4 GB** |                                                       |
-| **Total (4 API instances — scaling experiment)** | **≈ 3.3–5.0 GB** |                                                       |
+> **Superseded in part.** Kafka, PostgreSQL, Redis, Prometheus and Grafana were
+> ESTIMATED here at Phase 0 and are now **MEASURED** (idle, container RSS only) —
+> full detail, methodology and the Kafka startup issue found along the way:
+> [docs/testing/test-results/phase2-infrastructure-report.md](../testing/test-results/phase2-infrastructure-report.md).
+> The measured idle total for those five containers is **≈ 0.60 GB**, well under the
+> estimate — expected, since idle is not the state the estimate was reasoning about.
+> The comparison table in that report explains the gap and states plainly what is
+> **still** ESTIMATED (WSL2 VM overhead, and everything below the line, none of which
+> exists yet) versus what will be re-measured **under load** in Phase 9, which is the
+> number that actually matters for RISK-001.
+
+| Component                                        | Estimated RSS    | Basis                                                                                         |
+| ------------------------------------------------ | ---------------- | --------------------------------------------------------------------------------------------- |
+| Kafka (KRaft, 1 broker)                          | 1.2–1.6 GB       | JVM heap 1 GB + off-heap; ESTIMATED — **idle MEASURED: 0.46 GB, see above**                   |
+| PostgreSQL 16                                    | 300–500 MB       | default `shared_buffers` 128 MB + backends; ESTIMATED — **idle MEASURED: 0.02 GB**            |
+| Redis 7                                          | 80–150 MB        | small keyspace; ESTIMATED — **idle MEASURED: 0.01 GB**                                        |
+| Prometheus                                       | 250–400 MB       | 15 s scrape, short retention; ESTIMATED — **idle MEASURED: 0.03 GB**                          |
+| Grafana                                          | 150–250 MB       | ESTIMATED — **idle MEASURED: 0.07 GB**                                                        |
+| WSL2 VM overhead                                 | 300–500 MB       | ESTIMATED — not isolable via `docker stats`, still open                                       |
+| `fraud-api` (per instance)                       | 120–200 MB       | Node.js baseline + heap; ESTIMATED — service doesn't exist yet (Phase 3)                      |
+| `event-worker`                                   | 150–250 MB       | ESTIMATED — service doesn't exist yet (Phase 3)                                               |
+| `review-api`                                     | 100–150 MB       | ESTIMATED — service doesn't exist yet (Phase 3)                                               |
+| k6 at 2 000 TPS                                  | 200–400 MB       | ESTIMATED — Phase 9                                                                           |
+| **Total (1 API instance, full observability)**   | **≈ 2.9–4.4 GB** | **Idle infra subtotal now MEASURED at ≈ 0.60 GB; full total remains ESTIMATED until Phase 9** |
+| **Total (4 API instances — scaling experiment)** | **≈ 3.3–5.0 GB** |                                                                                               |
 
 Against 7.86 GB installed (of which Windows itself typically holds 2–3 GB), the full
 stack fits, but **without comfortable headroom**. This drives three concrete decisions
