@@ -1,0 +1,20 @@
+{
+  "name": "@fraudguard/feature-store",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Redis-backed hot-path state: idempotency (Phase 3) and behavioural features (Phase 4). ADR-002.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@fraudguard/config": "workspace:*",
+    "@fraudguard/domain": "workspace:*",
+    "ioredis": "^5.4.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}
