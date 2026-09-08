@@ -102,4 +102,32 @@ describe('loadConfig', () => {
     const config = loadConfig(requiredEnv({ KAFKA_BROKERS: 'broker1:9092, broker2:9092' }));
     expect(config.kafka.brokers).toEqual(['broker1:9092', 'broker2:9092']);
   });
+
+  // What: the literal string "false" parses to the boolean false.
+  // Why: `z.coerce.boolean()` calls `Boolean(value)`, and `Boolean("false")`
+  //      is `true` — every non-empty string is truthy. A .env file with
+  //      POSTGRES_SSL=false would silently enable SSL. This bug was caught
+  //      live: `pnpm db:migrate` failed against a non-SSL local Postgres
+  //      with "The server does not support SSL connections" because
+  //      POSTGRES_SSL=false in .env had coerced to true.
+  // Catches: any boolean field regressing back to z.coerce.boolean().
+  it.each([
+    ['POSTGRES_SSL', 'postgres', 'ssl'],
+    ['KAFKA_SSL', 'kafka', 'ssl'],
+    ['LOG_PRETTY', 'logging', 'pretty'],
+    ['METRICS_ENABLED', 'observability', 'metricsEnabled'],
+  ] as const)('%s=false parses to false, not true', (envVar, section, field) => {
+    const config = loadConfig(requiredEnv({ [envVar]: 'false' }));
+    const sectionValue = config[section] as Record<string, unknown>;
+    expect(sectionValue[field]).toBe(false);
+  });
+
+  it.each(['true', 'TRUE', '1'])('%s parses to true', (value) => {
+    const config = loadConfig(requiredEnv({ POSTGRES_SSL: value }));
+    expect(config.postgres.ssl).toBe(true);
+  });
+
+  it('rejects a boolean env var with a nonsensical value rather than guessing', () => {
+    expect(() => loadConfig(requiredEnv({ POSTGRES_SSL: 'maybe' }))).toThrow(ConfigValidationError);
+  });
 });
