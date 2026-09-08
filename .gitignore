@@ -21,6 +21,7 @@ out/
 *.pfx
 secrets/
 credentials.json
+CREDENTIALS.md
 
 # Test and coverage output
 coverage/
