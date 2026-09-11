@@ -201,30 +201,101 @@ partial, not claimed complete.
 
 ---
 
-## Phase 4 — Feature system
+## Phase 4 — Feature system ✅ **COMPLETE**
 
 |                  |                                                            |
 | ---------------- | ---------------------------------------------------------- |
 | **Goal**         | Real behavioural features, served from Redis inside budget |
-| **Blocked by**   | Phase 3                                                    |
-| **Requirements** | FR-002, NFR-003                                            |
+| **Blocked by**   | ~~Phase 3~~ complete                                       |
+| **Requirements** | FR-002, NFR-003 (partial — see below)                      |
 
-**Deliverables**
+**Delivered**
 
-- `packages/feature-store` — declarative feature definitions with windows, key layouts and **defaults on miss**
-- Redis client with single-pipeline vector fetch
-- Velocity, aggregate, distinct-count and risk-lookup feature families
-- Feature update consumers in `event-worker`
-- Feature rebuild-from-replay path (ADR-002 requires this to exist and be tested, not assumed)
-- In-memory feature store for unit tests
-- Deterministic feature-computation tests
+- `packages/feature-store` — declarative feature definitions (`feature-definitions.ts`:
+  every window, default and the longest-retention constant, in one place), Redis key
+  layout (`keys.ts`), a real read path (`feature-reader.ts`) and write path
+  (`feature-writer.ts`) replacing the Phase 3 placeholder
+- All 11 catalogue features computed for real: `transaction_count_5m/1h`,
+  `amount_sum_1h`, `average_amount_24h`, `distinct_merchants_1h`,
+  `distinct_locations_24h`, `failed_transactions_10m`, `device_transaction_count`,
+  `account_age_days`, `merchant_risk_score`, `ip_risk_score`
+- A single per-user rolling event log (sorted set, keyed by `transactionId`) plus
+  parallel hashes for amount/merchant/IP backs every velocity/aggregate/distinct
+  feature — trimmed to the longest window (24h) on every write, anchored to the
+  _event's_ timestamp rather than wall-clock time (required for replay determinism —
+  see below)
+- Risk-lookup read mechanism with default-on-miss (`risk-lookup.ts`); seeding real
+  merchant/IP reference data is Phase 5's named deliverable
+  (`docs/TEAM_TASK_BREAKDOWN.md`), not pulled forward
+- Two pipelined Redis round trips per fetch (not one per feature — see below) via
+  `fraud-api`'s existing `ScoringService`, wired in place of the Phase 3 placeholder,
+  with an explicit ADR-005 cautious-open fallback (`tryGetFeatureVector`) on Redis
+  failure
+- `createInMemoryRedis()` (`packages/testkit`, backed by `ioredis-mock`) — the
+  "in-memory feature store for unit tests" deliverable, shared rather than
+  hand-rolled so later packages (Phase 5's rule engine, most likely) can reuse it
+- 12 unit tests (`packages/feature-store/src/feature-store.test.ts`) + 3 integration
+  tests against real Redis (`tests/integration/feature-store.integration.test.ts`)
 
-**Exit criteria**
+**Two deliberate deviations from the original deliverable list, surfaced rather than
+hidden:**
 
-- After N seeded transactions, served features reflect all N
-- **Measured** p99 feature-fetch latency against the 8 ms budget
-- Rebuild-from-replay reproduces the same feature state
-- Missing Redis returns declared defaults rather than throwing
+1. **Distinct counts use an exact `Set`, not HyperLogLog.** ADR-002 names HLL as an
+   option "where exactness is not required"; it does not mandate it. `ioredis-mock`
+   does not implement `PFADD`/`PFCOUNT` at all (confirmed empirically, not assumed),
+   which would have blocked unit testing without Docker. Given ADR-002's own access
+   characteristics — "small per entity" — exact counting over a pulled window is
+   cheap and avoids HLL's probabilistic error for no real benefit at this scale.
+2. **Feature _writes_ are not wired to a Kafka consumer.** `apps/event-worker` and the
+   outbox relay are Phase 6 deliverables (`ARCHITECTURE.md`'s service table: "Feature
+   engine — write | event-worker"); nothing publishes `transaction.decided` yet.
+   `recordTransactionFeatures()` is the consumer's entire body, already built and
+   tested — Phase 6's job is to call it from a Kafka handler, not design it. Proved
+   end to end now by calling it directly (exactly what the rebuild-from-replay test
+   does) rather than waiting for Phase 6 to exist.
+
+**Exit criteria — all verified against real Redis, not only a mock**
+
+- ✅ After N seeded transactions, served features reflect all N (`IT-FEAT-001`, 8/8)
+- ✅ **Measured**, not estimated: feature-fetch latency over 200 samples against a
+  local real Redis — p50 1.7 ms, p99 3.97 ms, max 6.4 ms, against the 8 ms budget
+  (`IT-FEAT-003`). **Caveat (RISK-001):** co-located, single-threaded, no load — this
+  is not NFR-003's sustained-load measurement, which stays Phase 9's job; it is only
+  evidence the read path has headroom before Phase 9 puts load behind it
+- ✅ Rebuild-from-replay reproduces the same feature state, byte-for-byte, against
+  both the in-memory store and real Redis (`IT-FEAT-002`) — required anchoring
+  window trimming to event time rather than wall-clock time, or a replay run later
+  than the original events would trim more aggressively than the live run did and
+  silently fail to reproduce it
+- ✅ Missing Redis returns declared defaults rather than throwing — proved for the
+  first time against a **real** Redis outage (`redis.disconnect()` mid-suite), not
+  only the Phase 3 placeholder's permanently-"unavailable" vector
+  (`fraud-api-scoring.integration.test.ts`, new test)
+
+**One real bug the tests caught:** `amount_sum_1h`/`average_amount_24h` were computed
+by summing stored minor units directly — a $10 + $20 transaction pair reported `3000`,
+not `30`. `Money.toMajorUnits()`'s own doc comment says major units are "for ...
+feature computation only" — missed on first pass, caught by a unit test asserting the
+actual dollar figure rather than just "some positive number." Fixed by converting once,
+at the read boundary.
+
+**One real bug in the test suite itself, not the product:** the new integration test's
+`beforeAll`/`afterAll` originally called `redis.flushdb()` to clear its own state —
+which intermittently deleted `fraud-api-scoring.integration.test.ts`'s idempotency
+keys when Jest ran both files concurrently against the same Redis, since the two
+files don't share a worker process. Fixed by scoping cleanup to this package's own
+`feat:` keyspace. Also surfaced, empirically: ioredis's `keyPrefix` option does not
+apply to `KEYS`'s pattern argument or strip it from results — confirmed against a
+live client, not assumed, and documented in the fix.
+
+**FR-002 status: the acceptance criterion is met** ("after N transactions, served
+features reflect all N; feature computation is deterministic for a given event
+sequence") — proved directly, including under replay. What is NOT yet true is "from
+the transaction stream" in the literal, Kafka-consuming sense: that connection is
+Phase 6's. **NFR-003 status: not claimed.** Phase 4 measured the feature-fetch
+sub-component against ADR-002's internal 8 ms budget; NFR-003 itself is the
+end-to-end in-service p99 under sustained load, which remains Phase 9's, unchanged in
+the traceability matrix.
 
 ---
 
