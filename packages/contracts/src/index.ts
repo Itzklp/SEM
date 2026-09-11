@@ -7,6 +7,8 @@ export * from './dto/model.dto';
 export * from './dto/policy.dto';
 
 export * from './events/envelope';
+export * from './events/event-id';
+export * from './events/topics';
 export * from './events/transaction-events';
 export * from './events/case-events';
 export * from './events/audit-events';
