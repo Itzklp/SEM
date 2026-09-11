@@ -10,10 +10,13 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
+    "ioredis-mock": "^8.13.1",
     "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
+    "@types/ioredis-mock": "^8.2.8",
     "@types/jsonwebtoken": "^9.0.7",
+    "ioredis": "^5.4.1",
     "typescript": "^5.7.2"
   }
 }
