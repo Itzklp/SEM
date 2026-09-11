@@ -3,12 +3,15 @@ import {
   pgTable,
   text,
   bigint,
+  bigserial,
   char,
   timestamp,
   boolean,
   numeric,
   real,
+  integer,
   jsonb,
+  uuid,
 } from 'drizzle-orm/pg-core';
 
 /**
@@ -22,9 +25,12 @@ import {
  * when either changes — full rationale for every column and index:
  * docs/architecture/data-model.md.
  *
- * Phase 3 scope only: `transactions` and `decisions`. `fraud_cases`,
- * `outbox_events`, `audit_events`, `risk_policies`, `model_versions` are
- * Phase 6+ deliverables per docs/ROADMAP.md — not pulled forward.
+ * Phase 3: `transactions`, `decisions`. Phase 6: `outbox_events`,
+ * `fraud_cases`, `audit_events`. `risk_policies` (FR-006's persisted
+ * policy history) and `model_versions` (FR-012, Phase 10) remain
+ * deferred — FR-006 is satisfied today by Phase 5's in-memory
+ * `PolicyStore`, a deliberately simpler choice than a DB-backed table
+ * (documented there); `model_versions` has no real model to register yet.
  */
 
 /** No first-class `inet` builder in drizzle's pg-core — a thin custom type gets the real Postgres column type from data-model.md's rationale (range/subnet queries) without pulling in a heavier dependency. */
@@ -72,3 +78,59 @@ export type TransactionRow = typeof transactions.$inferSelect;
 export type NewTransactionRow = typeof transactions.$inferInsert;
 export type DecisionRow = typeof decisions.$inferSelect;
 export type NewDecisionRow = typeof decisions.$inferInsert;
+
+/**
+ * ADR-006's work queue — not durable history (`audit_events` is). One row
+ * per outgoing event; `payload` is whatever `@fraudguard/contracts`'
+ * event schemas produced, kept as `unknown` here since `packages/persistence`
+ * does not depend on `packages/contracts` (ADR-004 layering) — the caller
+ * (`apps/fraud-api`) is the one that knows the real shape.
+ */
+export const outboxEvents = pgTable('outbox_events', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  eventId: uuid('event_id').notNull(),
+  aggregateId: text('aggregate_id').notNull(),
+  eventType: text('event_type').notNull(),
+  topic: text('topic').notNull(),
+  partitionKey: text('partition_key').notNull(),
+  payload: jsonb('payload').notNull().$type<unknown>(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  attempts: integer('attempts').notNull().default(0),
+  lastError: text('last_error'),
+});
+
+export type OutboxEventRow = typeof outboxEvents.$inferSelect;
+export type NewOutboxEventRow = typeof outboxEvents.$inferInsert;
+
+/** FR-010, FR-011. One row per REVIEW decision — `lifecycle/case-lifecycle.ts` (packages/domain) governs the legal `status` transitions; this table just stores the current state. */
+export const fraudCases = pgTable('fraud_cases', {
+  caseId: uuid('case_id').primaryKey(),
+  transactionId: text('transaction_id')
+    .notNull()
+    .unique()
+    .references(() => transactions.transactionId),
+  status: text('status').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  reviewerId: text('reviewer_id'),
+  reviewReason: text('review_reason'),
+});
+
+export type FraudCaseRow = typeof fraudCases.$inferSelect;
+export type NewFraudCaseRow = typeof fraudCases.$inferInsert;
+
+/** FR-008. Append-only — `AuditRepository` (repositories/audit-repository.ts) exposes no update/delete method; see the migration's note on why that is application-level, not database-role-level, enforcement here. */
+export const auditEvents = pgTable('audit_events', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  eventId: uuid('event_id').notNull(),
+  aggregateType: text('aggregate_type').notNull(),
+  aggregateId: text('aggregate_id').notNull(),
+  action: text('action').notNull(),
+  actorId: text('actor_id'),
+  detail: jsonb('detail').notNull().$type<Record<string, unknown>>(),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+});
+
+export type AuditEventRow = typeof auditEvents.$inferSelect;
+export type NewAuditEventRow = typeof auditEvents.$inferInsert;
