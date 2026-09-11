@@ -8,6 +8,7 @@
     { "path": "../../packages/config" },
     { "path": "../../packages/contracts" },
     { "path": "../../packages/domain" },
+    { "path": "../../packages/observability" },
     { "path": "../../packages/persistence" }
   ],
   "include": ["src/**/*.ts"],
