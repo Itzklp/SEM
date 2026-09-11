@@ -20,6 +20,26 @@ describe('loadConfig', () => {
     expect(config.kafka.topicReplicationFactor).toBe(1);
   });
 
+  // What: the scoring provider defaults to the real zero-ML scorer.
+  // Why: Phase 5's gate is "fully functional... with zero ML code in
+  //      existence" — that has to be what a fresh checkout actually runs,
+  //      not an opt-in a developer has to discover.
+  it('defaults SCORING_PROVIDER to "rules", not "stub" or "ml"', () => {
+    expect(loadConfig(requiredEnv()).scoring.provider).toBe('rules');
+  });
+
+  // What: every rule threshold loads as data, with defaults, and is
+  //       overridable like any other config value.
+  // Why: FR-003 — "declared as data/config, not embedded in controllers".
+  it('loads rule thresholds with defaults, overridable via env', () => {
+    const defaults = loadConfig(requiredEnv());
+    expect(defaults.rules.velocity.max5m).toBe(10);
+    expect(defaults.rules.merchantRisk.riskThreshold).toBe(0.7);
+
+    const overridden = loadConfig(requiredEnv({ RULE_VELOCITY_MAX_5M: '3' }));
+    expect(overridden.rules.velocity.max5m).toBe(3);
+  });
+
   // What: a required variable with no default is missing.
   // Why: "Fail Fast" (Brief §7) — a process must refuse to start rather
   //      than crash unpredictably on the first request that needs it.

@@ -95,6 +95,16 @@ export interface AppConfig {
     };
   };
 
+  /** FR-003: every rule's threshold, as data — apps/fraud-api's composition root builds the six `FraudRule` instances from this. */
+  readonly rules: {
+    readonly velocity: { readonly max5m: number; readonly max1h: number };
+    readonly amountDeviation: { readonly multiplier: number };
+    readonly deviceRisk: { readonly maxDeviceTransactions: number };
+    readonly geographicAnomaly: { readonly maxDistinctLocations24h: number };
+    readonly failedAttempt: { readonly maxFailed10m: number };
+    readonly merchantRisk: { readonly riskThreshold: number };
+  };
+
   readonly security: {
     readonly jwt: {
       readonly secret: string;
@@ -200,6 +210,14 @@ function toAppConfig(env: RawEnv): AppConfig {
         model: env.SCORE_WEIGHT_MODEL,
         behavioural: env.SCORE_WEIGHT_BEHAVIOURAL,
       },
+    },
+    rules: {
+      velocity: { max5m: env.RULE_VELOCITY_MAX_5M, max1h: env.RULE_VELOCITY_MAX_1H },
+      amountDeviation: { multiplier: env.RULE_AMOUNT_DEVIATION_MULTIPLIER },
+      deviceRisk: { maxDeviceTransactions: env.RULE_DEVICE_MAX_TRANSACTIONS },
+      geographicAnomaly: { maxDistinctLocations24h: env.RULE_GEO_MAX_DISTINCT_LOCATIONS_24H },
+      failedAttempt: { maxFailed10m: env.RULE_FAILED_MAX_10M },
+      merchantRisk: { riskThreshold: env.RULE_MERCHANT_RISK_THRESHOLD },
     },
     security: {
       jwt: {
