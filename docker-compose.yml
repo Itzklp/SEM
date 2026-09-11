@@ -111,9 +111,20 @@ services:
       # clients). That fallback still fails the nonroutable-address check,
       # so its bind address has to be routable too — "kafka" resolves to
       # this container's own IP via Docker's embedded DNS.
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://kafka:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      # Two client listeners, not one — found necessary in Phase 6, not
+      # assumed: a Kafka client's initial bootstrap connection succeeds
+      # against ANY reachable address, but every subsequent produce/fetch
+      # is redirected to whatever address the broker ADVERTISES in its
+      # metadata response. A container (kafka-init, and any future
+      # containerised app) needs that address to be "kafka:9092" (Docker's
+      # embedded DNS); a process on the host (event-worker, run the same
+      # way fraud-api is — via `pnpm dev`, not containerised) needs
+      # "localhost:9094" instead, since "kafka" resolves nowhere outside
+      # the compose network. One broker, two listeners, two advertised
+      # addresses — not two brokers.
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:9094,CONTROLLER://kafka:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       # Single broker locally -> replication.factor must be 1 (ADR-001
       # documented limitation: broker-loss durability not demonstrable here).
@@ -129,6 +140,7 @@ services:
       KAFKA_HEAP_OPTS: "-Xmx768m -Xms768m"
     ports:
       - "9092:9092"
+      - "9094:9094"
     volumes:
       - kafka_data:/var/lib/kafka/data
     healthcheck:
