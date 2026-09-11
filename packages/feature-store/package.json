@@ -15,6 +15,7 @@
     "ioredis": "^5.4.1"
   },
   "devDependencies": {
+    "@fraudguard/testkit": "workspace:*",
     "typescript": "^5.7.2"
   }
 }
