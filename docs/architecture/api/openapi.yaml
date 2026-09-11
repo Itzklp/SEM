@@ -29,6 +29,8 @@ tags:
     description: Model registry (FR-012).
   - name: Operations
     description: Health and metrics (FR-013).
+  - name: Administration
+    description: Runtime configuration (FR-006). Requires the `admin` privilege — distinct from `score`/`review` (FR-015).
 
 security:
   - bearerAuth: []
@@ -229,6 +231,58 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
 
+  /admin/policy:
+    get:
+      tags: [Administration]
+      summary: Read the currently active decision policy
+      description: FR-006. Reflects any runtime change made via PUT — not necessarily what is in `.env`.
+      operationId: getPolicy
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Policy"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    put:
+      tags: [Administration]
+      summary: Replace the active decision policy, effective immediately
+      description: >
+        FR-006: "Thresholds are configurable at runtime without redeployment." Takes
+        effect on the very next `/fraud/score` request — no restart. Rejected (400) if
+        the submitted policy fails `isValidRiskPolicy` (no REVIEW band, or a degraded
+        band looser than the healthy one — ADR-005); the previously active policy is
+        left unchanged. Scoped to the decision policy only — score-combination weights
+        and rule thresholds are not hot-reloadable (see PolicyStore's doc comment).
+      operationId: updatePolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Policy"
+      responses:
+        "200":
+          description: The newly active policy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Policy"
+        "400":
+          description: Invalid policy (e.g. no REVIEW band, or a looser degraded band). Not adopted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   /metrics:
     get:
       tags: [Operations]
@@ -422,6 +476,40 @@ components:
         processingTimeMs:
           type: number
           minimum: 0
+
+    # Mirrors packages/contracts/src/dto/policy.dto.ts policyUpdateRequestSchema.
+    Policy:
+      type: object
+      additionalProperties: false
+      required: [policyVersion, allowMax, blockMin, degraded]
+      properties:
+        policyVersion:
+          type: string
+          minLength: 1
+        allowMax:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: "score < allowMax -> ALLOW"
+        blockMin:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: "score >= blockMin -> BLOCK; between allowMax and blockMin -> REVIEW"
+        degraded:
+          type: object
+          additionalProperties: false
+          required: [allowMax, blockMin]
+          description: ADR-005 cautious-open band, applied instead of the pair above when a decision is degraded. Must be at least as strict as the healthy band.
+          properties:
+            allowMax:
+              type: number
+              minimum: 0
+              maximum: 1
+            blockMin:
+              type: number
+              minimum: 0
+              maximum: 1
 
     TransactionDetail:
       type: object

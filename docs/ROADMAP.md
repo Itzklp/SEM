@@ -299,31 +299,102 @@ the traceability matrix.
 
 ---
 
-## Phase 5 — Rules, scoring and decisions
+## Phase 5 — Rules, scoring and decisions ✅ **COMPLETE**
 
 |                  |                                                |
 | ---------------- | ---------------------------------------------- |
 | **Goal**         | **FraudGuard works end to end without any ML** |
-| **Blocked by**   | Phase 4                                        |
+| **Blocked by**   | ~~Phase 4~~ complete                           |
 | **Requirements** | FR-003 – FR-007                                |
 
-**Deliverables**
+**Delivered**
 
-- Rule engine with `VelocityRule`, `AmountDeviationRule`, `DeviceRiskRule`, `GeographicAnomalyRule`, `FailedAttemptRule`, `MerchantRiskRule`
-- `StubFraudScoringProvider` — fully deterministic
-- `RuleBasedScoringProvider`
-- Score combination with configurable weights
-- Decision engine with configurable policy thresholds and a recorded policy version
-- Explainability: reasons on every decision, with no leakage of weights, thresholds or internals
-- Degraded-mode threshold set (ADR-005)
+- `packages/domain/src/rules/`: `VelocityRule`, `AmountDeviationRule`, `DeviceRiskRule`,
+  `GeographicAnomalyRule`, `FailedAttemptRule`, `MerchantRiskRule` — every threshold
+  sourced from `AppConfig.rules` (new `RULE_*` env vars), never hardcoded (FR-003).
+  `rule-engine.ts`'s `evaluateRules()` iterates a plain `FraudRule[]`, which is the
+  entire mechanism behind "adding a rule requires no engine change" — proved directly
+  by `UT-RULE-031`, an ad hoc rule defined only inside that test
+- `StubFraudScoringProvider` — deterministic, transaction-intrinsic only (amount vs.
+  a fixed scale), deliberately not the rule engine; doubles as `RuleBasedScoringProvider`'s
+  internal stand-in for "the model signal" until Phase 10
+- `RuleBasedScoringProvider` — FR-005's three independent signals (rules, model,
+  behavioural) combined via `combiner.ts`'s `combineScores()`
+- `computeBehaviouralScore()` — a continuous reading of recent activity, distinct from
+  the rule engine's hard thresholds, so a user sitting just under every rule's
+  threshold at once still reads as elevated
+- The real decision engine (`decision/decision-engine.ts`) and explainability
+  (`decision/reasons.ts`), replacing Phase 3's placeholder `decide.ts` exactly as that
+  file's own comment anticipated — `reasons.ts` guarantees FR-007's floor
+  unconditionally (a reason exists even when zero rules triggered but the model or
+  behavioural signal alone crossed a threshold)
+- **FR-006's runtime-configurability, actually built, not deferred**: `PolicyStore`
+  (`apps/fraud-api/src/common/`), a single mutable in-memory policy read fresh by
+  `ScoringService` on every request, plus `GET`/`PUT /api/v1/admin/policy` (new
+  `admin` privilege, distinct from `score`/`review`). Deliberately scoped to the
+  decision policy only — not score-combination weights or rule thresholds, which stay
+  fixed at process start (see `PolicyStore`'s doc comment for why)
+- `scoring-provider.factory.ts` — the one place `SCORING_PROVIDER` (now defaulting to
+  `rules`, not Phase 3's `stub`) selects an implementation; `ml` fails loudly at
+  startup rather than silently substituting something else (RISK-003)
 
-**Exit criteria — this is the project's most important gate**
+**Exit criteria — all verified against the live app, not just unit tests**
 
-- A demo transaction of each class produces `ALLOW`, `REVIEW`, `BLOCK` respectively
-- Identical input produces an identical score, every time
-- Adding a rule requires **no** change to the decision engine
-- Every non-`ALLOW` decision carries at least one reason
-- **The system is fully functional and demonstrable with zero ML code in existence**
+- ✅ A demo transaction of each class produces `ALLOW`, `REVIEW`, `BLOCK` respectively
+  — `demo-scenarios.integration.test.ts`, against real Postgres/Redis, through the
+  actual `POST /fraud/score` endpoint
+- ✅ Identical input produces an identical score, every time — determinism asserted
+  directly in every rule/provider/combiner/decision-engine unit test
+- ✅ Adding a rule requires **no** change to the decision engine — `UT-RULE-031`,
+  plus a second proof at the provider level (`RuleBasedScoringProvider`'s constructor
+  takes a longer rule array with zero change to the class)
+- ✅ Every non-`ALLOW` decision carries at least one reason — enforced unconditionally
+  by `buildReasons()`, not left to each provider to remember
+- ✅ **The system is fully functional and demonstrable with zero ML code in
+  existence** — `SCORING_PROVIDER=rules` is now the default; no file under
+  `packages/domain` or `apps/fraud-api` imports anything ML-related
+
+**One real product bug the tests caught:** `StubFraudScoringProvider` originally
+surfaced a "contributing risk factor" reason for any nonzero amount — which is nearly
+every transaction, making `reasons` non-empty (and visibly noisy) on routine `ALLOW`
+decisions too. FR-007 requires a reason on every non-`ALLOW` decision; it does not ask
+for commentary on healthy ones. Fixed with a minimum-contribution threshold
+(`MIN_CONTRIBUTION_TO_REPORT`), documented as the ASSUMPTION it is.
+
+**One real test-correctness bug, caught before it could mislead anyone:** an early
+version of `decision-engine.test.ts` asserted "a degraded decision is never more
+severe than a healthy one would have been, at every score" — which is false by
+design, not a bug in the policy. ADR-005's cautious-open band pulls **both** extremes
+toward `REVIEW`: a score that would cleanly `BLOCK` under the healthy band can land in
+`REVIEW` under the degraded one, because a lower-confidence signal shouldn't
+auto-block on weaker evidence — a human should look at it instead. The test's
+invariant was wrong, not the policy; fixed to assert the actual guarantee
+(`isValidRiskPolicy`'s two real inequalities — degraded never ALLOWs something
+healthy wouldn't have), with the BLOCK-relaxes-to-REVIEW case written down as its own
+test so the nuance survives the next reader rather than getting "fixed" back into a
+bug later.
+
+**Scope notes, stated rather than hidden:**
+
+- **Hot-reload is real but narrower than the full TEAM_TASK_BREAKDOWN wish-list.**
+  "Policy and rule configuration loading with hot reload" named both policy _and_
+  rule thresholds; only the decision policy is actually hot-reloadable today. Rule
+  thresholds and score-combination weights are consumed once, at process start, by
+  objects deliberately kept pure and config-free (`RuleBasedScoringProvider`, the six
+  `FraudRule`s) — making those hot-reloadable too means either reconstructing them per
+  request or threading a live reference through domain objects that should not know
+  about runtime config. FR-006's literal acceptance criterion ("thresholds are
+  configurable at runtime") is about the decision policy specifically, and that is
+  fully built and tested (`IT-DEC-001`).
+- **Merchant/IP risk reference-data seeding** (a named D2 task) is proved via the
+  `setMerchantRiskScore`/`setIpRiskScore` mechanism Phase 4 built, used directly in
+  `demo-scenarios.integration.test.ts` — there is no standalone seeding tool, because
+  there is no real reference dataset yet to seed from. Building one now would be
+  fabricating data to exercise code that has nothing real to consume.
+- The behavioural-score normalisation constants, the rule thresholds, and the stub's
+  amount scale are every one an explicit, documented `ASSUMED` value — there is no
+  labelled fraud dataset in this project's scope. Phase 9/11 is where these get
+  revisited against measurement, not guessed again.
 
 ---
 
