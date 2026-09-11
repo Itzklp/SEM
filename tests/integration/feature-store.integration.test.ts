@@ -203,6 +203,17 @@ describe('feature-store (integration): real Redis', () => {
       ipAddress: '203.0.113.1',
     };
 
+    // Warm-up, untimed: the first handful of calls on a connection pay a
+    // one-time cost (TCP slow start, V8 JIT warm-up) unrelated to the
+    // steady-state latency this measurement is actually after. Caught
+    // live: without this, p99 swung between ~4ms and ~9.5ms run to run
+    // on the same machine with no code change in between — noise from
+    // measuring the warm-up, not the budget.
+    const WARMUP = 20;
+    for (let i = 0; i < WARMUP; i += 1) {
+      await getFeatureVector(redis, lookup, asOf);
+    }
+
     const SAMPLES = 200;
     const durationsMs: number[] = [];
     for (let i = 0; i < SAMPLES; i += 1) {

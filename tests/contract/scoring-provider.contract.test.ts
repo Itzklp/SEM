@@ -1,5 +1,8 @@
 import {
   RiskScore,
+  RuleBasedScoringProvider,
+  StubFraudScoringProvider,
+  VelocityRule,
   createTransaction,
   Money,
   type FeatureVector,
@@ -14,13 +17,15 @@ import {
  * implementation is usable identically by a consumer written only against
  * the interface.
  *
- * Real implementations (`StubFraudScoringProvider`, `RuleBasedScoringProvider`,
- * and eventually `MLScoringProvider`) don't exist until Phase 5 / Phase 10.
- * This test uses two minimal fakes to prove the *contract* holds now, so
- * the interface is settled before three developers build against it in
- * parallel, and so a regression that breaks substitutability (e.g. a
- * provider-specific method creeping onto the interface) is caught the
- * moment it's introduced rather than discovered in Phase 10.
+ * The two minimal fakes below predate Phase 5 (when no real implementation
+ * existed yet) and are kept — they prove the contract holds for the
+ * interface itself, independent of any one implementation's behaviour.
+ * The final `it.each` case below adds the REAL `RuleBasedScoringProvider`
+ * and `StubFraudScoringProvider` (Phase 5) alongside them, so this test
+ * also proves FR-004's acceptance criterion directly: real providers are
+ * interchangeable behind this interface, not just hypothetically
+ * substitutable fakes. `MLScoringProvider` (Phase 10) joins this same
+ * list when it exists — RISK-003 is why it is not written sooner.
  */
 describe('FraudScoringProvider contract', () => {
   function buildInput(): ScoringInput {
@@ -93,11 +98,35 @@ describe('FraudScoringProvider contract', () => {
     const providers: FraudScoringProvider[] = [
       new AlwaysAllowProvider(),
       new AlwaysBlockProvider(),
+      new StubFraudScoringProvider(),
+      new RuleBasedScoringProvider([new VelocityRule({ max5m: 10, max1h: 20 })], {
+        rules: 0.5,
+        model: 0.35,
+        behavioural: 0.15,
+      }),
     ];
     for (const provider of providers) {
       const result = await provider.score(buildInput());
       expect(result.provider).toBe(provider.name);
       expect(result.modelVersion.length).toBeGreaterThan(0);
+    }
+  });
+
+  // FR-004: "Swapping providers requires no change to the decision engine
+  // or the API contract." Proved here with the real Phase 5 providers, not
+  // just the fakes above — the same `decide()` consumer, written only
+  // against the interface, produces a usable result for both.
+  it('the real Phase 5 providers are interchangeable behind the same interface', async () => {
+    const stub = new StubFraudScoringProvider();
+    const rules = new RuleBasedScoringProvider([new VelocityRule({ max5m: 10, max1h: 20 })], {
+      rules: 0.5,
+      model: 0.35,
+      behavioural: 0.15,
+    });
+
+    for (const provider of [stub, rules] as const) {
+      const outcome = await decide(provider, buildInput());
+      expect(['ALLOW', 'BLOCK']).toContain(outcome);
     }
   });
 });
