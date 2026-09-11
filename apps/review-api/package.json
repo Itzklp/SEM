@@ -7,8 +7,8 @@
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b",
-    "dev": "ts-node-dev -r ./preload.js -r tsconfig-paths/register --transpile-only --respawn src/main.ts",
-    "start": "node -r ./preload.js dist/main.js"
+    "dev": "ts-node-dev -r ./preload.js -r ./tracing-preload.js -r tsconfig-paths/register --transpile-only --respawn src/main.ts",
+    "start": "node -r ./preload.js -r ./tracing-preload.js dist/main.js"
   },
   "dependencies": {
     "@fastify/swagger": "^8.15.0",
@@ -16,6 +16,7 @@
     "@fraudguard/config": "workspace:*",
     "@fraudguard/contracts": "workspace:*",
     "@fraudguard/domain": "workspace:*",
+    "@fraudguard/observability": "workspace:*",
     "@fraudguard/persistence": "workspace:*",
     "dotenv": "^16.4.7",
     "@nestjs/common": "^10.4.15",

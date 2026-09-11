@@ -9,6 +9,7 @@ import {
   type CaseAction,
   type CaseStatus,
 } from '@fraudguard/domain';
+import { captureTraceparent, currentTraceId } from '@fraudguard/observability';
 import type { CaseRepository, FraudCaseRow, PagedResult } from '@fraudguard/persistence';
 import {
   BadRequestException,
@@ -67,18 +68,30 @@ export class CasesService {
 
     const reviewedAt = new Date();
     const eventId = deterministicEventId(caseId, 'fraud.case.reviewed');
+    // This is a NEW trace — the analyst's HTTP request to review-api, not
+    // a continuation of the original scoring request's trace (that one
+    // ended when fraud-api responded, possibly minutes/hours ago).
+    // `currentTraceId()`/`captureTraceparent()` read THIS request's span,
+    // set by `startTracing()`'s HttpInstrumentation — same replacement of
+    // the old transactionId placeholder as
+    // apps/fraud-api/src/scoring/build-outbox-events.ts.
+    const traceContext = captureTraceparent();
     const outboxEvent = {
       eventId,
       aggregateId: existing.transactionId,
       eventType: 'fraud.case.reviewed',
       topic: TOPIC_FOR_EVENT_TYPE['fraud.case.reviewed'],
       partitionKey: existing.transactionId,
+      // `exactOptionalPropertyTypes`: omit the key entirely rather than
+      // assign `undefined` to it — see build-outbox-events.ts's identical
+      // pattern.
+      ...(traceContext ? { traceContext } : {}),
       payload: caseReviewedEvent.parse({
         eventId,
         eventType: 'fraud.case.reviewed',
         aggregateId: existing.transactionId,
         occurredAt: reviewedAt.toISOString(),
-        traceId: existing.transactionId,
+        traceId: currentTraceId() ?? existing.transactionId,
         payload: {
           caseId,
           transactionId: existing.transactionId,
