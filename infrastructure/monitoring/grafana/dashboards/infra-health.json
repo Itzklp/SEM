@@ -1,7 +1,7 @@
 {
   "title": "FraudGuard — Infrastructure Health",
   "uid": "fg-infra-health",
-  "description": "Phase 2 scope only: verifies the observability wiring itself (Prometheus reachable, scrape targets registered). Application dashboards (throughput, decision mix, latency percentiles) are a Phase 7 deliverable, built once fraud-api/event-worker/review-api exist and expose real metrics — see docs/ROADMAP.md.",
+  "description": "Phase 2 scope: verifies the observability wiring itself (Prometheus reachable, scrape targets registered). Application dashboards (throughput, decision mix, latency percentiles, hot/cold-path health) are Phase 7's golden-signals.json / hot-path.json / cold-path.json, in this same folder.",
   "tags": ["fraudguard", "infrastructure"],
   "timezone": "browser",
   "schemaVersion": 39,

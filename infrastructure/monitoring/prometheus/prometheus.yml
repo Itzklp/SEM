@@ -1,11 +1,18 @@
 # FraudGuard — Prometheus scrape configuration.
 #
-# Phase 2 wires this up; the application-side metrics it scrapes (
-# transactions_total, fraud_decisions_total, etc. — docs/architecture/
-# ARCHITECTURE.md §"Observability") don't exist until Phase 7, and the
-# services themselves don't exist until Phase 3+. Targets below will show
-# as `down` until then — that is the correct, honest state for an
-# infrastructure-only phase, not a bug in this config.
+# Phase 2 wired this up with container-name targets (`fraud-api:3000`,
+# etc.) anticipating a containerised `apps` profile. Phase 7 is the first
+# phase where these targets actually serve `/metrics` — and by then,
+# ARCHITECTURE.md/ROADMAP.md's own repeated pattern (Phase 3's fraud-api,
+# Phase 6's event-worker) had already settled the apps profile as
+# permanently empty: every app runs on the HOST via `pnpm dev`, the same
+# way `fraud-api` always has, not as a container. A container-name target
+# would never resolve from inside Prometheus's own container — these
+# therefore point at `host.docker.internal`, Docker Desktop's
+# host-resolving DNS name (the `extra_hosts` entry in docker-compose.yml's
+# `prometheus` service is the Linux-without-Docker-Desktop equivalent) —
+# the same class of "container vs. host reachability" fix Phase 6 already
+# made once for Kafka's listener.
 
 global:
   scrape_interval: 15s
@@ -13,6 +20,9 @@ global:
   external_labels:
     project: fraudguard
     environment: local
+
+rule_files:
+  - /etc/prometheus/alerts.yml
 
 scrape_configs:
   # Prometheus scraping itself — the one target guaranteed to be up,
@@ -25,7 +35,7 @@ scrape_configs:
   - job_name: fraud-api
     metrics_path: /metrics
     static_configs:
-      - targets: ["fraud-api:3000"]
+      - targets: ["host.docker.internal:3000"]
         labels:
           service: fraud-api
           path: hot
@@ -33,7 +43,7 @@ scrape_configs:
   - job_name: review-api
     metrics_path: /metrics
     static_configs:
-      - targets: ["review-api:3001"]
+      - targets: ["host.docker.internal:3001"]
         labels:
           service: review-api
           path: cold
@@ -41,15 +51,19 @@ scrape_configs:
   - job_name: event-worker
     metrics_path: /metrics
     static_configs:
-      - targets: ["event-worker:9100"]
+      - targets: ["host.docker.internal:9100"]
         labels:
           service: event-worker
           path: cold
 
+  # Not yet implemented (Phase 10) — left in deliberately, same reasoning
+  # as ml_duration_seconds (packages/observability/src/metrics/
+  # definitions.ts): shows as `down` honestly rather than being added
+  # only once the service exists.
   - job_name: ml-service
     metrics_path: /metrics
     static_configs:
-      - targets: ["ml-service:8000"]
+      - targets: ["host.docker.internal:8000"]
         labels:
           service: ml-service
           path: hot

@@ -1,0 +1,43 @@
+{
+  "title": "FraudGuard — Cold Path",
+  "uid": "fg-cold-path",
+  "description": "ADR-006/FR-010/FR-011: outbox backlog depth, Kafka consumer lag per group/topic, and open review-case depth — the three cold-path health signals named across ADR-005/ADR-006 as 'directly measurable' and 'alertable'. Phase 7.",
+  "tags": ["fraudguard", "cold-path"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Outbox backlog (unpublished rows)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "outbox_pending_total", "legendFormat": "pending", "refId": "A" }]
+    },
+    {
+      "id": 2,
+      "title": "Open review cases (review_queue_depth)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "review_queue_depth", "legendFormat": "open cases", "refId": "A" }]
+    },
+    {
+      "id": 3,
+      "title": "Kafka consumer lag by group and topic",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "kafka_consumer_lag",
+          "legendFormat": "{{group}} / {{topic}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

@@ -186,8 +186,18 @@ services:
     image: prom/prometheus:v2.55.1
     profiles: [observability]
     networks: [fraudguard]
+    # fraud-api/review-api/event-worker run on the HOST (`pnpm dev`), not
+    # as containers — the same "apps profile is empty by design" fact
+    # Phase 3/6 already documented. `prometheus.yml`'s targets for them
+    # are therefore `host.docker.internal:<port>`, not a container name —
+    # Docker Desktop resolves this natively; `extra_hosts` below is the
+    # Linux-without-Docker-Desktop equivalent (`host-gateway`), harmless
+    # and ignored where Docker Desktop already provides it.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./infrastructure/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infrastructure/monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -205,6 +215,35 @@ services:
       retries: 10
       start_period: 10s
     mem_limit: 400m
+    logging: *default-logging
+
+  # OTLP-native trace backend (Phase 7, FR-013/NFR-010) — `all-in-one`'s
+  # in-memory storage is the deliberate choice here: this is a local
+  # development aid for "is a single transaction traceable end to end",
+  # not a production trace store, and in-memory means one fewer volume
+  # and one fewer Postgres-adjacent dependency to reason about. Chosen
+  # over Tempo specifically because Tempo wants an object-storage backend
+  # (S3-compatible) even for local use, which is a second new dependency
+  # this prototype's scope does not justify (DEVELOPMENT_ENVIRONMENT.md
+  # §5.1's 4-core/7.86GB capacity constraint — every added container is a
+  # real trade-off here, not a free add).
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    profiles: [observability]
+    networks: [fraudguard]
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686" # UI
+      - "4318:4318" # OTLP/HTTP — OTEL_EXPORTER_OTLP_ENDPOINT (.env.example) points here
+      - "4317:4317" # OTLP/gRPC — unused by this system's SDK setup (HTTP exporter only), published for completeness
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:16686/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    mem_limit: 300m
     logging: *default-logging
 
   grafana:

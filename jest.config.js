@@ -30,6 +30,7 @@ function baseProject(displayName, roots, opts = {}) {
       '^@fraudguard/config$': '<rootDir>/packages/config/src/index.ts',
       '^@fraudguard/feature-store$': '<rootDir>/packages/feature-store/src/index.ts',
       '^@fraudguard/messaging$': '<rootDir>/packages/messaging/src/index.ts',
+      '^@fraudguard/observability$': '<rootDir>/packages/observability/src/index.ts',
       '^@fraudguard/persistence$': '<rootDir>/packages/persistence/src/index.ts',
       '^@fraudguard/testkit$': '<rootDir>/packages/testkit/src/index.ts',
     },

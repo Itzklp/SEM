@@ -1,0 +1,72 @@
+{
+  "title": "FraudGuard — Hot Path",
+  "uid": "fg-hot-path",
+  "description": "ADR-003 enforcement: per-stage timing of fraud-api's authorization pipeline (idempotency_check, feature_fetch, score, decide, persist — fraud_score_duration_seconds), plus the decision mix and ADR-005's degraded-decision ratio (fraud_decisions_total). Phase 7.",
+  "tags": ["fraudguard", "hot-path"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Per-stage p99 duration",
+      "type": "timeseries",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(fraud_score_duration_seconds_bucket[5m])) by (le, stage))",
+          "legendFormat": "{{stage}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Per-stage p50 duration",
+      "type": "timeseries",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(fraud_score_duration_seconds_bucket[5m])) by (le, stage))",
+          "legendFormat": "{{stage}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Decision mix (ALLOW / REVIEW / BLOCK)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(rate(fraud_decisions_total[5m])) by (decision)",
+          "legendFormat": "{{decision}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Degraded-decision ratio (ADR-005)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum(rate(fraud_decisions_total{degraded=\"true\"}[10m])) / sum(rate(fraud_decisions_total[10m]))",
+          "legendFormat": "degraded ratio",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

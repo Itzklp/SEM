@@ -17,6 +17,7 @@ describe('loadConfig', () => {
     expect(config.env).toBe('development');
     expect(config.postgres.password).toBe('local_dev_only');
     expect(config.ports.fraudApi).toBe(3000);
+    expect(config.ports.eventWorkerMetrics).toBe(9100);
     expect(config.kafka.topicReplicationFactor).toBe(1);
   });
 

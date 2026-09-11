@@ -1,0 +1,89 @@
+# FraudGuard — Prometheus alert rules (Phase 7, docs/ROADMAP.md's five
+# named deliverables). No Alertmanager is deployed alongside this — a
+# deliberate scope decision, not an oversight: these rules ARE evaluated
+# by Prometheus and their firing state IS visible (the Prometheus UI's
+# "Alerts" page, `ALERTS`/`ALERTS_FOR_STATE` metrics queryable like any
+# other, and a Grafana panel can list firing alerts from either), which is
+# what this phase's exit criteria ask for. Routing a fired alert to an
+# actual notification channel (email/Slack/PagerDuty) has no real
+# recipient in a prototype with no on-call rotation — adding Alertmanager
+# now would be infrastructure with nothing real behind it.
+#
+# Every threshold below is an explicit ASSUMPTION (CONTRIBUTING.md: label
+# every number) — there is no production incident history to tune
+# against yet. Revisit with measurement once Phase 9's load testing
+# produces real numbers to calibrate these against.
+
+groups:
+  - name: fraudguard.latency
+    rules:
+      # ADR-003's hot-path budget is single-digit milliseconds; 250ms is
+      # two orders of magnitude above that — a genuine "something is
+      # badly wrong" signal, not a tight SLO gate (Phase 9 owns the real,
+      # rigorously-measured NFR-001 latency claim).
+      - alert: FraudScoreLatencyBudgetBreach
+        expr: histogram_quantile(0.99, sum(rate(request_duration_seconds_bucket{route="/api/v1/fraud/score"}[5m])) by (le)) > 0.25
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "fraud-api p99 latency on /fraud/score exceeds 250ms"
+          description: "ADR-003's hot-path budget is single-digit milliseconds per stage — a sustained p99 this high means the hot path is in real trouble, not just noisy."
+
+  - name: fraudguard.errors
+    rules:
+      - alert: HighHttpErrorRate
+        expr: |
+          sum(rate(request_errors_total[5m])) by (service)
+            /
+          sum(rate(request_duration_seconds_count[5m])) by (service)
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} is returning >5% 4xx/5xx responses"
+          description: "Sustained over 5 minutes — a brief spike during a deploy is expected; this is not that."
+
+  - name: fraudguard.kafka
+    rules:
+      - alert: KafkaConsumerLagHigh
+        expr: kafka_consumer_lag > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consumer group {{ $labels.group }} is lagging on {{ $labels.topic }}"
+          description: "ARCHITECTURE.md §8: event-worker down is a 'Deferred' failure mode — lag growing is expected briefly, but not sustained past 5 minutes at this depth."
+
+  - name: fraudguard.decisions
+    rules:
+      # ARCHITECTURE.md §8: "the degraded flag ... is persisted and
+      # exported as a metric, so the proportion of degraded decisions is
+      # visible on the dashboard and can be alerted on" — this rule is
+      # that alert, named verbatim in that doc.
+      - alert: DegradedDecisionRatioHigh
+        expr: |
+          sum(rate(fraud_decisions_total{degraded="true"}[10m]))
+            /
+          sum(rate(fraud_decisions_total[10m]))
+          > 0.10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 10% of recent decisions are degraded"
+          description: "ADR-005's cautious-open policy is the correct response to one failing dependency — but a sustained high ratio means that dependency (most likely Redis) has been down for a while, not briefly."
+
+  - name: fraudguard.review_queue
+    rules:
+      # ADR-005 names this explicitly: "the review queue can accumulate
+      # ... review-queue depth is a monitored, alertable signal."
+      - alert: ReviewQueueDepthHigh
+        expr: review_queue_depth > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Over 100 cases are open and awaiting review"
+          description: "A cautious-open degradation widens the REVIEW band, shifting more decisions to humans by design — this alert is what tells an operator that shift has actually overwhelmed the review capacity, not just shifted risk somewhere visible."

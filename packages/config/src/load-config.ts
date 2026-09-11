@@ -28,6 +28,7 @@ export interface AppConfig {
     readonly fraudApi: number;
     readonly reviewApi: number;
     readonly mlService: number;
+    readonly eventWorkerMetrics: number;
   };
   readonly maxOldSpaceMb: number;
 
@@ -144,6 +145,7 @@ function toAppConfig(env: RawEnv): AppConfig {
       fraudApi: env.FRAUD_API_PORT,
       reviewApi: env.REVIEW_API_PORT,
       mlService: env.ML_SERVICE_PORT,
+      eventWorkerMetrics: env.EVENT_WORKER_METRICS_PORT,
     },
     maxOldSpaceMb: env.NODE_MAX_OLD_SPACE_MB,
     postgres: {
