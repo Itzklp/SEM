@@ -1,0 +1,25 @@
+# Provisions Prometheus as Grafana's default datasource automatically on
+# container start — "no manual UI configuration" is a Phase 7 exit
+# criterion (docs/ROADMAP.md), satisfied from Phase 2 onward.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+
+  # Phase 7: lets Grafana's own "Explore" view query traces directly,
+  # alongside the metrics dashboards below — the Jaeger UI
+  # (http://localhost:16686) remains the primary place to browse traces;
+  # this is a convenience, not a replacement for it.
+  - name: Jaeger
+    uid: jaeger
+    type: jaeger
+    access: proxy
+    url: http://jaeger:16686
+    isDefault: false
+    editable: false

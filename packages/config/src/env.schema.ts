@@ -43,6 +43,11 @@ export const rawEnvSchema = z.object({
   FRAUD_API_PORT: z.coerce.number().int().positive().default(3000),
   REVIEW_API_PORT: z.coerce.number().int().positive().default(3001),
   ML_SERVICE_PORT: z.coerce.number().int().positive().default(8000),
+  // event-worker has no HTTP framework at all (apps/event-worker/src/
+  // common/metrics-server.ts) — this is that plain server's one port,
+  // matching infrastructure/monitoring/prometheus/prometheus.yml's
+  // `event-worker:9100` scrape target.
+  EVENT_WORKER_METRICS_PORT: z.coerce.number().int().positive().default(9100),
   NODE_MAX_OLD_SPACE_MB: z.coerce.number().int().positive().default(512),
 
   // --- PostgreSQL (ADR-003: never read on the hot path) ---------------------
