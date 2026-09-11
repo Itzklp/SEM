@@ -10,6 +10,7 @@
     { "path": "../../packages/domain" },
     { "path": "../../packages/feature-store" },
     { "path": "../../packages/messaging" },
+    { "path": "../../packages/observability" },
     { "path": "../../packages/persistence" }
   ],
   "include": ["src/**/*.ts"],

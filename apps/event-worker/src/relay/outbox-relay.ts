@@ -1,5 +1,6 @@
 import { sendEvent, type Producer } from '@fraudguard/messaging';
-import type { BatchResult, OutboxRepository } from '@fraudguard/persistence';
+import { runWithExtractedContext, withSpan } from '@fraudguard/observability';
+import type { BatchResult, OutboxEventRow, OutboxRepository } from '@fraudguard/persistence';
 import type { Logger } from 'pino';
 
 export interface RunOnceOptions {
@@ -20,24 +21,16 @@ export interface RunOnceOptions {
 export async function runOutboxRelayOnce(options: RunOnceOptions): Promise<BatchResult> {
   const result = await options.outboxRepository.processUnpublishedBatch(
     options.batchSize,
-    async (row) => {
-      try {
-        await sendEvent(options.producer, {
-          topic: row.topic,
-          key: row.partitionKey,
-          value: row.payload,
-        });
-        return { ok: true };
-      } catch (error) {
-        // Connection/broker-level failures (Kafka down) and genuine
-        // per-row failures both land here — see OutboxRepository's doc
-        // comment for why this always retries rather than dead-lettering:
-        // a sustained Kafka outage must drain fully on recovery (Phase 6
-        // exit criterion), which a give-up-after-N-attempts policy would
-        // violate for exactly the scenario that matters.
-        return { ok: false, error: error instanceof Error ? error.message : String(error) };
-      }
-    },
+    // `row.traceContext` (migration 0003) is the ORIGINAL request's
+    // traceparent, captured before this poll tick ever ran — extracting
+    // it here, rather than using whatever context happens to be active
+    // in this relay loop, is what makes the published span a child of
+    // that original trace instead of a disconnected new one. See
+    // packages/observability/src/tracing/trace-context.ts.
+    async (row) =>
+      runWithExtractedContext(row.traceContext ?? undefined, () =>
+        publishOneRow(options.producer, row),
+      ),
   );
 
   if (result.publishedCount > 0 || result.failedCount > 0) {
@@ -47,6 +40,41 @@ export async function runOutboxRelayOnce(options: RunOnceOptions): Promise<Batch
     );
   }
   return result;
+}
+
+/**
+ * One row's publish, as its own span (`withSpan`, not `measure` — there
+ * is no `kafka_publish_duration_seconds` in the roadmap's metric list,
+ * and `OutboxRepository.processUnpublishedBatch`'s own `measure()` call
+ * already times the whole batch, publish included — see that method's
+ * doc comment). Failures are caught and returned as `PublishOutcome`,
+ * not rethrown — `OutboxRepository`'s contract is "tell me whether this
+ * row published", not "throw and abort the whole batch because one row's
+ * broker call failed".
+ */
+async function publishOneRow(
+  producer: Producer,
+  row: OutboxEventRow,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await withSpan('kafka.produce', { 'messaging.destination': row.topic }, () =>
+      sendEvent(producer, {
+        topic: row.topic,
+        key: row.partitionKey,
+        value: row.payload,
+        ...(row.traceContext ? { headers: { traceparent: row.traceContext } } : {}),
+      }),
+    );
+    return { ok: true };
+  } catch (error) {
+    // Connection/broker-level failures (Kafka down) and genuine per-row
+    // failures both land here — see OutboxRepository's doc comment for
+    // why this always retries rather than dead-lettering: a sustained
+    // Kafka outage must drain fully on recovery (Phase 6 exit criterion),
+    // which a give-up-after-N-attempts policy would violate for exactly
+    // the scenario that matters.
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 export interface RelayHandle {
