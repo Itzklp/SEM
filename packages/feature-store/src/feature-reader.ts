@@ -1,4 +1,5 @@
 import { type FeatureVector } from '@fraudguard/domain';
+import { measure, redisDurationSeconds } from '@fraudguard/observability';
 import type { Redis } from 'ioredis';
 
 import { FEATURE_DEFAULTS, MS } from './feature-definitions';
@@ -53,6 +54,21 @@ export async function getFeatureVector(
   redis: Redis,
   input: FeatureLookupInput,
   asOf: Date = new Date(),
+): Promise<FeatureVector> {
+  return measure(
+    {
+      span: 'redis.feature_fetch',
+      histogram: redisDurationSeconds,
+      labels: { operation: 'feature_fetch' },
+    },
+    () => doGetFeatureVector(redis, input, asOf),
+  );
+}
+
+async function doGetFeatureVector(
+  redis: Redis,
+  input: FeatureLookupInput,
+  asOf: Date,
 ): Promise<FeatureVector> {
   const now = asOf.getTime();
   const { userId, deviceId, merchantId, ipAddress } = input;

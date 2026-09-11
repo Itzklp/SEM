@@ -12,6 +12,7 @@
   "dependencies": {
     "@fraudguard/config": "workspace:*",
     "@fraudguard/domain": "workspace:*",
+    "@fraudguard/observability": "workspace:*",
     "ioredis": "^5.4.1"
   },
   "devDependencies": {

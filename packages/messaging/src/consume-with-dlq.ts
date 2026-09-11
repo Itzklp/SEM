@@ -9,8 +9,27 @@ export interface ConsumeWithDlqOptions {
   readonly producer: Producer;
   readonly topics: readonly string[];
   readonly maxAttempts: number;
-  readonly handler: (payload: unknown, messageKey: string | null, topic: string) => Promise<void>;
+  readonly handler: (
+    payload: unknown,
+    messageKey: string | null,
+    topic: string,
+    headers: Record<string, string>,
+  ) => Promise<void>;
   readonly logger: Logger;
+}
+
+/** kafkajs decodes header values as `Buffer | string | (Buffer | string)[] | undefined` — normalised to a plain string map (first value if an array, omitted if absent) so callers (e.g. trace-context extraction) never have to think about the wire representation. */
+function decodeHeaders(
+  raw: Record<string, Buffer | string | (Buffer | string)[] | undefined>,
+): Record<string, string> {
+  const headers: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const single = Array.isArray(value) ? value[0] : value;
+    if (single !== undefined) {
+      headers[key] = single.toString();
+    }
+  }
+  return headers;
 }
 
 /** kafka-init's naming convention: every catalogue topic has a matching `<topic>.dlq`. Generic enough to hardcode here (not fraud-specific), unlike `@fraudguard/contracts`' event-shape knowledge, which this package deliberately does not depend on. */
@@ -54,6 +73,7 @@ export async function consumeWithDlq(options: ConsumeWithDlqOptions): Promise<vo
     eachMessage: async ({ topic, partition, message }) => {
       const key = message.key?.toString() ?? null;
       const raw = message.value?.toString() ?? 'null';
+      const headers = decodeHeaders(message.headers ?? {});
 
       let payload: unknown;
       try {
@@ -70,7 +90,7 @@ export async function consumeWithDlq(options: ConsumeWithDlqOptions): Promise<vo
       let lastError: unknown;
       for (let attempt = 1; attempt <= options.maxAttempts; attempt += 1) {
         try {
-          await options.handler(payload, key, topic);
+          await options.handler(payload, key, topic, headers);
           return;
         } catch (error) {
           lastError = error;

@@ -1,10 +1,10 @@
 import type { AppConfig } from '@fraudguard/config';
-import { Kafka, logLevel, type Producer, type Consumer } from 'kafkajs';
+import { Kafka, logLevel, type Producer, type Consumer, type Admin } from 'kafkajs';
 
 // Re-exported so callers (apps/event-worker) only ever need to depend on
 // this package, never on `kafkajs` directly — one fewer place the exact
 // client library is named outside this package's own boundary.
-export type { Producer, Consumer };
+export type { Producer, Consumer, Admin };
 
 /**
  * ADR-001: Kafka is cold-path only — nothing in `apps/fraud-api`'s hot
