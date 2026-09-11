@@ -10,8 +10,11 @@
     { "path": "packages/config" },
     { "path": "packages/contracts" },
     { "path": "packages/feature-store" },
+    { "path": "packages/messaging" },
     { "path": "packages/persistence" },
     { "path": "packages/testkit" },
-    { "path": "apps/fraud-api" }
+    { "path": "apps/fraud-api" },
+    { "path": "apps/event-worker" },
+    { "path": "apps/review-api" }
   ]
 }
