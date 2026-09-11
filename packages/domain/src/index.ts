@@ -23,3 +23,24 @@ export * from './lifecycle/case-lifecycle';
 // The two load-bearing abstractions — CON-005.
 export * from './scoring/fraud-scoring-provider';
 export * from './rules/fraud-rule';
+
+// Phase 5: the rule engine and its six rules.
+export * from './rules/rule-thresholds';
+export * from './rules/ratio-severity';
+export * from './rules/velocity-rule';
+export * from './rules/amount-deviation-rule';
+export * from './rules/device-risk-rule';
+export * from './rules/geographic-anomaly-rule';
+export * from './rules/failed-attempt-rule';
+export * from './rules/merchant-risk-rule';
+export * from './rules/rule-engine';
+
+// Phase 5: scoring providers and combination.
+export * from './scoring/behavioural-score';
+export * from './scoring/combiner';
+export * from './scoring/stub-scoring-provider';
+export * from './scoring/rule-based-scoring-provider';
+
+// Phase 5: the real decision engine and explainability.
+export * from './decision/decision-engine';
+export * from './decision/reasons';
