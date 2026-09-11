@@ -98,6 +98,8 @@ export const outboxEvents = pgTable('outbox_events', {
   publishedAt: timestamp('published_at', { withTimezone: true }),
   attempts: integer('attempts').notNull().default(0),
   lastError: text('last_error'),
+  /** Migration 0003 — W3C `traceparent`, captured at write time. Nullable: see that migration's note. `packages/observability/src/tracing/trace-context.ts` is what reads/writes this value; `packages/persistence` stores it opaquely, same ADR-004 layering as `payload` above. */
+  traceContext: text('trace_context'),
 });
 
 export type OutboxEventRow = typeof outboxEvents.$inferSelect;
