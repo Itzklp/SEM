@@ -47,3 +47,23 @@ export class IllegalTransitionError extends DomainError {
     super(`${entity}: cannot transition from ${from} to ${to}`);
   }
 }
+
+/**
+ * A proposed `RiskPolicy` fails `isValidRiskPolicy` — e.g. no REVIEW band,
+ * or a degraded policy looser than the healthy one (ADR-005). FR-006:
+ * runtime policy changes go through this same check `packages/config`'s
+ * loader applies at boot, so a bad value cannot be adopted at runtime
+ * either, just because it arrived later.
+ */
+export class InvalidPolicyError extends DomainError {
+  readonly code = 'INVALID_POLICY';
+
+  // Widens `DomainError`'s `protected` constructor to `public` — not
+  // useless despite the identical body, since `InvalidPolicyError` (unlike
+  // `InvariantViolationError`/`IllegalTransitionError`) needs no extra
+  // fields and would otherwise inherit `protected`, which blocks
+  // `new InvalidPolicyError(...)` from outside this package.
+  public constructor(message: string) {
+    super(message);
+  }
+}
