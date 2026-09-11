@@ -1,0 +1,32 @@
+{
+  "name": "@fraudguard/event-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The cold path (ADR-001): outbox relay, audit persistence, feature-update and case-creation Kafka consumers.",
+  "main": "./dist/main.js",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "dev": "ts-node-dev -r ./preload.js -r tsconfig-paths/register --transpile-only --respawn src/main.ts",
+    "start": "node -r ./preload.js dist/main.js"
+  },
+  "dependencies": {
+    "@fraudguard/config": "workspace:*",
+    "@fraudguard/contracts": "workspace:*",
+    "@fraudguard/domain": "workspace:*",
+    "@fraudguard/feature-store": "workspace:*",
+    "@fraudguard/messaging": "workspace:*",
+    "@fraudguard/persistence": "workspace:*",
+    "dotenv": "^16.4.7",
+    "pino": "^9.5.0",
+    "pino-pretty": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10",
+    "ioredis": "^5.4.1",
+    "pg": "^8.13.1",
+    "ts-node-dev": "^2.0.0",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.7.2"
+  }
+}
