@@ -2,9 +2,12 @@ import type { AppConfig } from '@fraudguard/config';
 import type { ScoreRequest, ScoreResponse } from '@fraudguard/contracts';
 import {
   createTransaction,
+  decide,
+  buildReasons,
   Money,
   transitionTransaction,
   type FraudDecision,
+  type FraudScoringProvider,
   type DegradedReason,
   type FeatureVector,
   type Transaction,
@@ -22,10 +25,10 @@ import type { Logger } from 'pino';
 import { APP_CONFIG } from '../common/config.provider';
 import { LOGGER } from '../common/logger.provider';
 import { TRANSACTION_REPOSITORY } from '../common/persistence.provider';
+import { POLICY_STORE, type PolicyStore } from '../common/policy-store';
 import { REDIS_CLIENT } from '../common/redis.provider';
 
-import { decide } from './decide';
-import { PlaceholderScoringProvider } from './placeholder-scoring-provider';
+import { createScoringProvider } from './scoring-provider.factory';
 
 /**
  * FR-017: how long a duplicate `transactionId` still returns the original
@@ -45,14 +48,17 @@ const IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60;
  */
 @Injectable()
 export class ScoringService {
-  private readonly scoringProvider = new PlaceholderScoringProvider();
+  private readonly scoringProvider: FraudScoringProvider;
 
   constructor(
-    @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Inject(APP_CONFIG) config: AppConfig,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     @Inject(TRANSACTION_REPOSITORY) private readonly transactionRepository: TransactionRepository,
+    @Inject(POLICY_STORE) private readonly policyStore: PolicyStore,
     @Inject(LOGGER) private readonly logger: Logger,
-  ) {}
+  ) {
+    this.scoringProvider = createScoringProvider(config);
+  }
 
   async score(request: ScoreRequest): Promise<ScoreResponse> {
     const startedAt = Date.now();
@@ -104,17 +110,26 @@ export class ScoringService {
     status = transitionTransaction(status, 'SCORED');
 
     // --- SCORED -> DECIDED ---------------------------------------------------
-    const decision = decide(scoringResult.score, this.config.policy, degraded);
+    // Read fresh on every request, not cached — FR-006: a policy change
+    // via the admin endpoint (admin/policy.controller.ts) takes effect on
+    // the very next request, with no restart (PolicyStore's doc comment).
+    const policy = this.policyStore.get();
+    const decision = decide(scoringResult.score, policy, degraded);
     status = transitionTransaction(status, 'DECIDED');
     const decidedTransaction: Transaction = { ...transaction, status };
+    // FR-007's floor: every non-ALLOW decision carries at least one
+    // reason, even if zero rules triggered (the model or behavioural
+    // signal alone can push the score past a threshold) — enforced once,
+    // here, rather than trusted to every provider individually.
+    const reasons = buildReasons(scoringResult.riskFactors, decision);
 
     const processingTimeMs = Date.now() - startedAt;
     const fraudDecision: FraudDecision = {
       transactionId: transaction.transactionId,
       decision,
       riskScore: scoringResult.score,
-      reasons: scoringResult.riskFactors,
-      policyVersion: this.config.policy.version,
+      reasons,
+      policyVersion: policy.policyVersion,
       modelVersion: scoringResult.modelVersion,
       scoringProvider: scoringResult.provider,
       degraded,
