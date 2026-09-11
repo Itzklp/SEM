@@ -22,7 +22,7 @@
     "test:integration": "jest --selectProjects integration --runInBand",
     "test:contract": "jest --selectProjects contract",
     "test:e2e": "jest --selectProjects e2e --runInBand",
-    "test:resilience": "jest --selectProjects resilience --runInBand",
+    "test:resilience": "jest --selectProjects resilience --runInBand --forceExit",
     "test:architecture": "jest --selectProjects architecture",
     "test:load": "node scripts/run-load-tests.mjs",
     "test:all": "pnpm test:unit && pnpm test:architecture && pnpm test:integration && pnpm test:contract && pnpm test:e2e",

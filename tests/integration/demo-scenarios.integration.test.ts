@@ -54,6 +54,18 @@ describe('demo: ALLOW / REVIEW / BLOCK, one transaction of each class (Phase 5 g
     // test that silently passes on stale data either way is worse than
     // one that requires a clean slate and says so.
     const demoTransactionIds = ['demo_allow_001', 'demo_review_001', 'demo_block_001'];
+    // outbox_events too (added in Phase 6, after this cleanup block was
+    // first written) — missed here, an outbox row's `event_id` is
+    // DETERMINISTIC from (transactionId, eventType) (ADR-006), so a
+    // second run that deletes/reinserts transactions+decisions but
+    // leaves a stale outbox_events row behind collides on that row's
+    // UNIQUE(event_id) constraint, rolling back the whole insert and
+    // turning every demo request into a 500. Caught live, not by
+    // inspection — exactly the kind of gap this project's own rule is
+    // "say when you find one," not "quietly patch and move on."
+    await persistence.hotPool.query('DELETE FROM outbox_events WHERE aggregate_id = ANY($1)', [
+      demoTransactionIds,
+    ]);
     await persistence.hotPool.query('DELETE FROM decisions WHERE transaction_id = ANY($1)', [
       demoTransactionIds,
     ]);
