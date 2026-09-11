@@ -98,11 +98,16 @@ describe('fraud-api: POST /api/v1/fraud/score (integration)', () => {
     expect(parsed.success).toBe(true);
     if (parsed.success) {
       expect(parsed.data.transactionId).toBe(txn.transactionId);
-      // Phase 3's placeholder provider always scores 0 -> ALLOW; features
-      // are honestly unavailable (Phase 4 not built yet) -> degraded=true.
+      // The scoring provider is still Phase 5's stub (always scores 0 ->
+      // ALLOW). Features, as of Phase 4, are REAL — and Redis is up and
+      // reachable in this suite, so a brand-new generated user legitimately
+      // gets a *live* vector full of declared defaults (no history is not
+      // the same as "unavailable"; see feature-reader.ts). Updated from
+      // Phase 3, where this always read degraded=true because no real
+      // feature computation existed yet to be anything else.
       expect(parsed.data.decision).toBe('ALLOW');
-      expect(parsed.data.degraded).toBe(true);
-      expect(parsed.data.degradedReason).toBe('FEATURES_UNAVAILABLE');
+      expect(parsed.data.degraded).toBe(false);
+      expect(parsed.data.degradedReason).toBe('NONE');
     }
 
     // The persisted transaction must reflect the lifecycle actually
@@ -179,6 +184,37 @@ describe('fraud-api: POST /api/v1/fraud/score (integration)', () => {
     expect(first.statusCode).toBe(200);
     expect(second.statusCode).toBe(200);
     expect(second.json()).toEqual(first.json());
+  });
+
+  // RT-005 (Phase 4 exit criterion: "Missing Redis returns declared
+  // defaults rather than throwing"). What: with Redis unreachable, a
+  // well-formed, authenticated request still gets a 200 decision — using
+  // every feature's declared default — rather than an error. Why: this is
+  // ADR-005's cautious-open policy for Redis, proved for the first time
+  // against a REAL failure (Phase 3 only ever exercised the Phase-3
+  // placeholder's permanently-"unavailable" vector, never an actual Redis
+  // outage). The full per-dependency resilience suite (every ADR-005 row)
+  // is Phase 8's job — this is Phase 4's narrower claim about its own
+  // fallback, not a resilience suite.
+  it('falls back to degraded, cautious-open features when Redis is unreachable, rather than failing the request', async () => {
+    const txn = generateTransaction({ seed: 3007 }, 0);
+    redis.disconnect();
+    try {
+      const response = await inject(txn, scoreToken);
+      expect(response.statusCode).toBe(200);
+      const body: unknown = response.json();
+      const parsed = scoreResponseSchema.safeParse(body);
+      expect(parsed.success).toBe(true);
+      if (parsed.success) {
+        expect(parsed.data.degraded).toBe(true);
+        expect(parsed.data.degradedReason).toBe('FEATURES_UNAVAILABLE');
+      }
+    } finally {
+      redis.connect();
+      if (redis.status !== 'ready') {
+        await new Promise((resolve) => redis.once('ready', resolve));
+      }
+    }
   });
 
   it('GET /api/v1/health reports healthy dependencies without authentication', async () => {
