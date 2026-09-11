@@ -1,3 +1,4 @@
+import { measure, redisDurationSeconds } from '@fraudguard/observability';
 import type { Redis } from 'ioredis';
 
 /**
@@ -20,8 +21,17 @@ export async function getIdempotentResult<T>(
   redis: Redis,
   transactionId: string,
 ): Promise<T | null> {
-  const raw = await redis.get(idempotencyKey(transactionId));
-  return raw === null ? null : (JSON.parse(raw) as T);
+  return measure(
+    {
+      span: 'redis.idempotency_get',
+      histogram: redisDurationSeconds,
+      labels: { operation: 'idempotency_get' },
+    },
+    async () => {
+      const raw = await redis.get(idempotencyKey(transactionId));
+      return raw === null ? null : (JSON.parse(raw) as T);
+    },
+  );
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- symmetry with getIdempotentResult<T> above; T documents "this is the same shape you'll read back", not just `unknown`.
@@ -31,7 +41,14 @@ export async function storeIdempotentResult<T>(
   result: T,
   ttlSeconds: number,
 ): Promise<void> {
-  await redis.set(idempotencyKey(transactionId), JSON.stringify(result), 'EX', ttlSeconds);
+  await measure(
+    {
+      span: 'redis.idempotency_set',
+      histogram: redisDurationSeconds,
+      labels: { operation: 'idempotency_set' },
+    },
+    () => redis.set(idempotencyKey(transactionId), JSON.stringify(result), 'EX', ttlSeconds),
+  );
 }
 
 function idempotencyKey(transactionId: string): string {

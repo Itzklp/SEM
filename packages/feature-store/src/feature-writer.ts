@@ -1,4 +1,5 @@
 import type { FraudDecision, Transaction } from '@fraudguard/domain';
+import { measure, redisDurationSeconds } from '@fraudguard/observability';
 import type { Redis } from 'ioredis';
 
 import { DEVICE_RETENTION_MS, MAX_USER_WINDOW_MS } from './feature-definitions';
@@ -46,29 +47,38 @@ export async function recordTransactionFeatures(
   transaction: Transaction,
   decision: FraudDecision,
 ): Promise<void> {
-  const { userId, deviceId, transactionId } = transaction;
-  const ts = transaction.timestamp.getTime();
+  await measure(
+    {
+      span: 'redis.feature_write',
+      histogram: redisDurationSeconds,
+      labels: { operation: 'feature_write' },
+    },
+    async () => {
+      const { userId, deviceId, transactionId } = transaction;
+      const ts = transaction.timestamp.getTime();
 
-  const write = redis.pipeline();
-  write.zadd(userEventLogKey(userId), ts, transactionId);
-  write.hset(userAmountKey(userId), transactionId, String(transaction.amount.minorUnits));
-  write.hset(userMerchantKey(userId), transactionId, transaction.merchantId);
-  write.hset(userLocationKey(userId), transactionId, transaction.ipAddress);
-  write.zadd(deviceLogKey(deviceId), ts, transactionId);
-  write.setnx(accountFirstSeenKey(userId), String(ts));
-  if (decision.decision === 'BLOCK') {
-    write.zadd(userFailedLogKey(userId), ts, transactionId);
-  }
-  await write.exec();
+      const write = redis.pipeline();
+      write.zadd(userEventLogKey(userId), ts, transactionId);
+      write.hset(userAmountKey(userId), transactionId, String(transaction.amount.minorUnits));
+      write.hset(userMerchantKey(userId), transactionId, transaction.merchantId);
+      write.hset(userLocationKey(userId), transactionId, transaction.ipAddress);
+      write.zadd(deviceLogKey(deviceId), ts, transactionId);
+      write.setnx(accountFirstSeenKey(userId), String(ts));
+      if (decision.decision === 'BLOCK') {
+        write.zadd(userFailedLogKey(userId), ts, transactionId);
+      }
+      await write.exec();
 
-  // Trimming is anchored to the *event's own* timestamp, not wall-clock
-  // "now" — deliberately. A replay run happens later in wall-clock time
-  // than the events it replays; trimming against `Date.now()` would then
-  // discard more than the live run did, and the rebuild would NOT
-  // reproduce the same state. Anchoring to `ts` makes trimming a pure
-  // function of the event stream, which is what "replayable" requires.
-  await trimUserWindow(redis, userId, ts);
-  await trimDeviceWindow(redis, deviceId, ts);
+      // Trimming is anchored to the *event's own* timestamp, not wall-clock
+      // "now" — deliberately. A replay run happens later in wall-clock time
+      // than the events it replays; trimming against `Date.now()` would then
+      // discard more than the live run did, and the rebuild would NOT
+      // reproduce the same state. Anchoring to `ts` makes trimming a pure
+      // function of the event stream, which is what "replayable" requires.
+      await trimUserWindow(redis, userId, ts);
+      await trimDeviceWindow(redis, deviceId, ts);
+    },
+  );
 }
 
 /** Drops event-log entries (and their parallel hash fields) older than the longest feature window — nothing further back is ever read. */

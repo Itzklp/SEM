@@ -4,7 +4,7 @@
     "outDir": "dist",
     "rootDir": "src"
   },
-  "references": [{ "path": "../config" }, { "path": "../domain" }],
+  "references": [{ "path": "../config" }, { "path": "../domain" }, { "path": "../observability" }],
   "include": ["src/**/*.ts"],
   "exclude": ["**/*.test.ts", "**/*.spec.ts", "dist", "node_modules"]
 }
