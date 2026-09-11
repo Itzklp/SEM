@@ -3,16 +3,16 @@ import type { Transaction } from '@fraudguard/domain';
 import { eq } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
-import { decisions, transactions, type DecisionRow, type TransactionRow } from '../schema';
+import { hasPgErrorCode, UNIQUE_VIOLATION } from '../pg-errors';
+import {
+  decisions,
+  outboxEvents,
+  transactions,
+  type DecisionRow,
+  type TransactionRow,
+} from '../schema';
 
-/** Postgres error code for a unique_violation — https://www.postgresql.org/docs/current/errcodes-appendix.html */
-const UNIQUE_VIOLATION = '23505';
-
-function hasPgErrorCode(error: unknown): error is { code: string } {
-  return (
-    typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string'
-  );
-}
+import type { OutboxEventInput } from './outbox-repository';
 
 export interface ScoredTransactionResult {
   readonly transaction: TransactionRow;
@@ -36,9 +36,19 @@ export interface ScoredTransactionResult {
 export class TransactionRepository {
   constructor(private readonly db: NodePgDatabase<Record<string, unknown>>) {}
 
+  /**
+   * `outboxEventInputs`: the `transaction.received`/`transaction.decided`
+   * event payloads, already built by the caller (`apps/fraud-api`, which
+   * knows `@fraudguard/contracts`' event schemas — this package
+   * deliberately does not, per ADR-004's layering). Written in the SAME
+   * transaction as the decision, per ADR-006 — either all three rows
+   * exist or none do, so a decision can never exist without its outbox
+   * event ever being written at all.
+   */
   async insertScored(
     transaction: Transaction,
     decision: FraudDecision,
+    outboxEventInputs: readonly OutboxEventInput[] = [],
   ): Promise<ScoredTransactionResult> {
     try {
       return await this.db.transaction(async (tx) => {
@@ -77,6 +87,19 @@ export class TransactionRepository {
 
         if (!transactionRow || !decisionRow) {
           throw new Error('Insert returned no row — should be unreachable');
+        }
+
+        if (outboxEventInputs.length > 0) {
+          await tx.insert(outboxEvents).values(
+            outboxEventInputs.map((event) => ({
+              eventId: event.eventId,
+              aggregateId: event.aggregateId,
+              eventType: event.eventType,
+              topic: event.topic,
+              partitionKey: event.partitionKey,
+              payload: event.payload,
+            })),
+          );
         }
 
         return { transaction: transactionRow, decision: decisionRow, wasExisting: false };
