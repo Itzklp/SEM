@@ -14,6 +14,7 @@
   "dependencies": {
     "@fraudguard/config": "workspace:*",
     "@fraudguard/domain": "workspace:*",
+    "@fraudguard/observability": "workspace:*",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.36.4",
     "pg": "^8.13.1"

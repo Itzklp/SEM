@@ -1,0 +1,24 @@
+-- FraudGuard migration 0003 — trace context on outbox rows.
+--
+-- Phase 7 scope (FR-013/NFR-010). Full rationale:
+-- packages/observability/src/tracing/trace-context.ts.
+--
+-- The outbox relay (apps/event-worker) publishes a row to Kafka in a
+-- DIFFERENT PROCESS, at a LATER TIME, than the HTTP request that wrote
+-- it — OpenTelemetry's normal context propagation (function calls,
+-- Kafka message headers once a message exists) cannot bridge that gap by
+-- itself, because nothing carries the original request's trace across
+-- "write a row now, read it back on the next poll tick" the way it
+-- carries across "call this function" or "read this header". Persisting
+-- the W3C `traceparent` string alongside the row is what lets the relay
+-- (and, via Kafka message headers set from this column, every consumer
+-- downstream of it) resume the SAME trace rather than starting a new,
+-- disconnected one — required for this phase's exit criterion: "a single
+-- transaction is traceable end to end by traceId".
+--
+-- Nullable: rows written before this migration (none exist in practice —
+-- outbox rows are pruned per OUTBOX_RETENTION_HOURS — and rows written
+-- with OTEL_ENABLED=false) have no captured context. `trace-context.ts`'s
+-- `runWithExtractedContext` degrades to "start a fresh, disconnected
+-- span" for those, rather than treating a missing value as an error.
+ALTER TABLE outbox_events ADD COLUMN trace_context TEXT;

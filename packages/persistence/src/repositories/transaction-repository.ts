@@ -1,5 +1,6 @@
 import type { FraudDecision } from '@fraudguard/domain';
 import type { Transaction } from '@fraudguard/domain';
+import { dbDurationSeconds, measure } from '@fraudguard/observability';
 import { eq } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
@@ -50,6 +51,21 @@ export class TransactionRepository {
     decision: FraudDecision,
     outboxEventInputs: readonly OutboxEventInput[] = [],
   ): Promise<ScoredTransactionResult> {
+    return measure(
+      {
+        span: 'db.insert_scored',
+        histogram: dbDurationSeconds,
+        labels: { operation: 'insert_scored' },
+      },
+      () => this.doInsertScored(transaction, decision, outboxEventInputs),
+    );
+  }
+
+  private async doInsertScored(
+    transaction: Transaction,
+    decision: FraudDecision,
+    outboxEventInputs: readonly OutboxEventInput[],
+  ): Promise<ScoredTransactionResult> {
     try {
       return await this.db.transaction(async (tx) => {
         const [transactionRow] = await tx
@@ -98,6 +114,7 @@ export class TransactionRepository {
               topic: event.topic,
               partitionKey: event.partitionKey,
               payload: event.payload,
+              traceContext: event.traceContext ?? null,
             })),
           );
         }
@@ -118,22 +135,31 @@ export class TransactionRepository {
   async findByTransactionId(
     transactionId: string,
   ): Promise<{ transaction: TransactionRow; decision: DecisionRow } | null> {
-    const [transactionRow] = await this.db
-      .select()
-      .from(transactions)
-      .where(eq(transactions.transactionId, transactionId))
-      .limit(1);
-    if (!transactionRow) {
-      return null;
-    }
-    const [decisionRow] = await this.db
-      .select()
-      .from(decisions)
-      .where(eq(decisions.transactionId, transactionId))
-      .limit(1);
-    if (!decisionRow) {
-      return null;
-    }
-    return { transaction: transactionRow, decision: decisionRow };
+    return measure(
+      {
+        span: 'db.find_transaction_by_id',
+        histogram: dbDurationSeconds,
+        labels: { operation: 'find_transaction_by_id' },
+      },
+      async () => {
+        const [transactionRow] = await this.db
+          .select()
+          .from(transactions)
+          .where(eq(transactions.transactionId, transactionId))
+          .limit(1);
+        if (!transactionRow) {
+          return null;
+        }
+        const [decisionRow] = await this.db
+          .select()
+          .from(decisions)
+          .where(eq(decisions.transactionId, transactionId))
+          .limit(1);
+        if (!decisionRow) {
+          return null;
+        }
+        return { transaction: transactionRow, decision: decisionRow };
+      },
+    );
   }
 }
