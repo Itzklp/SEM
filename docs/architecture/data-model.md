@@ -173,9 +173,15 @@ work queue drained by the relay; `audit_events` is the durable history.
 | `UNIQUE (event_id)`                           | Dedup backstop.                                                                        |
 | `(aggregate_type, aggregate_id, occurred_at)` | The investigation-screen query: "everything that happened to transaction X, in order." |
 
-**Enforcement.** `audit_events` has no `UPDATE` or `DELETE` grant for any application
-role — enforced at the database privilege level, not just by convention, so "append-only"
-is not something a future bug can quietly violate.
+**Enforcement.** `AuditRepository` (`packages/persistence`) exposes no `update`/`delete`
+method — append-only today is enforced at the application layer, not a database-role
+`REVOKE`. **Correction, noticed while touching adjacent docs during Phase 7:** this
+paragraph previously claimed database-privilege-level enforcement; that was never
+actually true in this prototype — every service connects as one shared Postgres role
+(the migration runner included), so a `REVOKE` would either block migrations too or,
+if the role is the database owner (it is, locally), have no effect at all. Migration
+0002's own comment and `AuditRepository`'s doc comment are accurate; this file was not.
+Real least-privilege roles are Phase 11's.
 
 ---
 

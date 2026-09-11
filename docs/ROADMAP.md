@@ -553,28 +553,152 @@ moment a real consumer needs it, not speculatively.
 
 ---
 
-## Phase 7 — Observability
+## Phase 7 — Observability ✅ **COMPLETE**
 
 |                  |                                                  |
 | ---------------- | ------------------------------------------------ |
 | **Goal**         | The system can be understood while it is running |
-| **Blocked by**   | Phase 6                                          |
+| **Blocked by**   | ~~Phase 6~~ complete                             |
 | **Requirements** | FR-013, NFR-010, NFR-011                         |
 
-**Deliverables**
+**Delivered**
 
-- Prometheus metrics: `transactions_total`, `fraud_decisions_total` (labelled by decision and `degraded`), `fraud_score_duration_seconds`, `request_duration_seconds`, `request_errors_total`, `kafka_consumer_lag`, `redis_duration_seconds`, `db_duration_seconds`, `ml_duration_seconds`, `active_requests`, `outbox_pending_total`
-- **Per-stage** hot-path timing (required by ADR-003 enforcement)
-- OpenTelemetry tracing across `fraud-api` → Redis → Postgres → Kafka → `event-worker`
-- Grafana dashboards committed as provisioned JSON
-- Alert rules: latency budget breach, error rate, consumer lag, degraded-decision ratio, review-queue depth
+- `packages/observability` (new package) — a single shared Prometheus `Registry`
+  (`prom-client`) and OpenTelemetry tracing setup, imported by every app. All eleven
+  roadmap-named metrics, plus `review_queue_depth` (added — see deviations below):
+  `transactions_total`, `fraud_decisions_total`, `fraud_score_duration_seconds`
+  (labelled by `stage`), `request_duration_seconds`, `request_errors_total`,
+  `kafka_consumer_lag`, `redis_duration_seconds`, `db_duration_seconds`,
+  `ml_duration_seconds` (honestly unobserved until Phase 10), `active_requests`,
+  `outbox_pending_total`, `review_queue_depth`
+- **Per-stage hot-path timing** (ADR-003 enforcement) — `ScoringService.score()`'s
+  five stages (`idempotency_check`, `feature_fetch`, `score`, `decide`, `persist`),
+  each timed and spanned by the same `measure()` call (`packages/observability/src/
+measure.ts`) — one timer producing both the histogram observation and the matching
+  span, so the two numbers cannot drift apart (ADR-007)
+- OpenTelemetry tracing across `fraud-api` → Redis → PostgreSQL → Kafka →
+  `event-worker` — manual spans at every existing I/O call site
+  (`@fraudguard/feature-store`, `@fraudguard/persistence`, `@fraudguard/messaging`),
+  not auto-instrumentation (ADR-007's reasoning). `outbox_events.trace_context`
+  (migration 0003) persists the W3C `traceparent` captured at write time so the
+  relay and every Kafka consumer resume the SAME trace across ADR-006's
+  process/time gap — the one piece of this phase genuinely specific to this
+  system's architecture
+- Jaeger (`all-in-one`, OTLP-native, in-memory) added to the `observability` Docker
+  profile; a Grafana "Jaeger" datasource provisioned alongside Prometheus
+- Three Grafana dashboards, committed as provisioned JSON:
+  `golden-signals.json` (throughput, latency percentiles, error rate, saturation),
+  `hot-path.json` (per-stage timing, decision mix, degraded-decision ratio),
+  `cold-path.json` (outbox backlog, Kafka consumer lag, review-queue depth)
+- Five alert rules (`infrastructure/monitoring/prometheus/alerts.yml`), evaluated by
+  Prometheus directly: latency budget breach, HTTP error rate, Kafka consumer lag,
+  degraded-decision ratio, review-queue depth — all five confirmed loaded and
+  evaluating with `"health":"ok"` against the running stack
+- `docker-compose.yml`/`prometheus.yml`: scrape targets for `fraud-api`/`review-api`/
+  `event-worker` fixed to `host.docker.internal:<port>` — these apps run on the HOST
+  (`pnpm dev`, per Phase 3/6's already-settled pattern), not as containers, so the
+  original container-name targets could never have resolved from inside Prometheus's
+  own container. The same class of fix Phase 6 made once for Kafka's listener
+- `docs/adr/ADR-007-observability-stack.md` — the four stack decisions this phase
+  had to make that the roadmap names but does not settle on its own: manual spans
+  over auto-instrumentation, Jaeger over Tempo/Zipkin, Prometheus-native alerting
+  over deploying Alertmanager, and the persisted-`trace_context` mechanism for
+  bridging the outbox's async gap
 
-**Exit criteria**
+**Deliberate deviations, recorded rather than silently taken:**
 
-- A single transaction is traceable end to end by `traceId`
-- Dashboards render real data under load
-- Metrics contract test passes
-- Dashboards reproduce from a clean checkout with no manual UI configuration
+1. **`review_queue_depth` is a twelfth metric, not one of the roadmap's eleven.**
+   The alert-rules deliverable names "review-queue depth" (ADR-005 calls it a
+   "monitored, alertable signal" directly) but nothing in the metrics list measured
+   it. Added `review-api`'s own poller (`queue-depth-poller.ts`, the one place that
+   already owns `fraud_cases` query access) rather than leave the alert with nothing
+   to evaluate.
+2. **No `pg`/`ioredis`/`kafkajs` OpenTelemetry auto-instrumentation.** Every
+   Redis/Postgres/Kafka call already passes through one of three small,
+   already-enumerable packages; `measure()` wraps each with BOTH a span and the
+   matching histogram from one timer. Two separately-maintained instrumentation
+   mechanisms for the same operation is a correctness risk this system does not
+   need to accept (full reasoning: ADR-007).
+3. **No Alertmanager.** The five rules are evaluated and visible in Prometheus's own
+   UI/API — satisfying "alert rules" as a deliverable — but nothing routes a firing
+   alert to a real notification channel, because this prototype has no on-call
+   rotation and no real recipient. Same reasoning Phase 6 already applied to the
+   outbox relay never dead-lettering.
+4. **Jaeger, not Tempo.** `all-in-one`'s OTLP-native ingestion and in-memory storage
+   avoid a second new dependency (Tempo's usual object-storage backend) that this
+   prototype's 4-core/7.86 GB capacity constraint does not justify.
+
+**Exit criteria — all verified against the real stack, not asserted**
+
+- ✅ **A single transaction is traceable end to end by `traceId`** —
+  `IT-TRACE-001` (`tests/integration/observability.integration.test.ts`) proves the
+  mechanism (traceparent survives outbox → real Kafka header → consumer extraction).
+  Confirmed a SECOND way, manually, against the live running stack: one real
+  `POST /fraud/score` produced exactly one Jaeger trace with **19 spans across
+  `fraud-api` AND `event-worker`** — the root HTTP span, all five hot-path stages,
+  the outbox relay's `kafka.produce`, and all three Kafka consumers
+  (`kafka.consume.feature_update`/`case_creation`/`audit`) — the cross-process,
+  cross-time gap ADR-006 creates, actually bridged, not merely argued
+- ✅ **Dashboards render real data under load** — `IT-OBS-001`: a real scored
+  transaction moved `transactions_total`, `fraud_decisions_total`, and all five
+  `fraud_score_duration_seconds` stages, checked against the shared registry a real
+  Prometheus scrape would read. Confirmed manually too: `/metrics` on a live
+  `fraud-api` showed real per-route `request_duration_seconds` counts (including a
+  real `401` from a malformed manual test token) after ordinary curl traffic
+- ✅ **Metrics contract test passes** — `CT-METRIC-001` (`tests/contract/
+metrics-contract.test.ts`, 2/2, no live infra required): all 12 registered metrics
+  present by name and type
+- ✅ **Dashboards reproduce from a clean checkout with no manual UI configuration** —
+  `docker compose --profile observability up -d` provisions Prometheus, Grafana
+  (both datasources, all three new dashboards) and Jaeger with zero manual steps,
+  the same pattern Phase 2 already established for `infra-health.json`
+
+**Three real bugs this phase found, by actually running the real processes —
+not by inspection, and not caught by any automated test:**
+
+1. **Every HTTP request to `fraud-api`/`review-api` hung forever.** `registerHttpMetrics`'s
+   Fastify `onRequest`/`onResponse` hooks were plain 2-argument functions that
+   returned `undefined` rather than a `Promise` — Fastify's hook runner decides how
+   to wait for a hook by its declared arity: 2 arguments means "the return value
+   must be a `Promise` I can `.then()`"; a synchronous `undefined` satisfies
+   neither that nor the 3-argument `done()` callback style, so Fastify waited on a
+   `.then()` that would never resolve. **Every** route hung, `/health` included —
+   found only by actually curling a live `pnpm dev` server, because every
+   integration test in this repo constructs the NestJS app directly
+   (`Test.createTestingModule`), which never runs `main.ts`'s `bootstrap()` at all
+   and therefore never registered these hooks in the first place. Fixed by using
+   the explicit, unambiguous 3-argument `(request, reply, done) => { ...; done(); }`
+   form.
+2. **OpenTelemetry's `HttpInstrumentation` never actually activated.** `startTracing()`
+   called from inside `bootstrap()` registers the instrumentation AFTER
+   `@nestjs/platform-fastify` (and therefore `http`) has already been required —
+   TypeScript's CommonJS output hoists every `import` above code written later in
+   the same file, the EXACT same hoisting problem `apps/fraud-api/preload.js`
+   already documents for `dotenv`, just for a different module. Every `measure()`
+   span still exported correctly (proving the SDK pipeline itself worked) but with
+   no HTTP root span to nest under, so `build-outbox-events.ts`'s `captureTraceparent()`
+   returned `undefined` for every real request — found by checking
+   `outbox_events.trace_context` against a live server, not by a test (the same
+   Nest-test-harness gap as bug #1: no automated test exercises `main.ts`'s actual
+   bootstrap order). Fixed with the same pattern as the dotenv fix: a new plain-JS
+   `tracing-preload.js` per app, `-r`'d before `tsconfig-paths/register`, doing the
+   full tracer-provider setup in `packages/observability/preload-tracing.js` before
+   anything else in the process can require `http`.
+3. **A fixed `transactionId` in `IT-TRACE-001` itself collided with Kafka's own
+   topic retention.** The test's Kafka consumer reads `transaction.decided`
+   `fromBeginning: true` and matches by `aggregateId` — correct for a first run,
+   but a SECOND run with the same fixed id found a PREVIOUS run's message first
+   (Postgres rows are cleaned between runs; Kafka's topic history is not), and
+   compared the wrong run's trace id. Fixed by generating a unique id per test
+   execution — caught by re-running the new test twice in a row, the same
+   verification discipline every phase in this project applies before calling a
+   test result stable.
+
+**One environmental finding, fixed at the infrastructure layer:** Prometheus's
+`fraud-api`/`review-api`/`event-worker` scrape targets were still named after
+containers that were never going to exist (Phase 3/6 already settled these apps as
+host-run, not containerised) — fixed with `host.docker.internal` plus an
+`extra_hosts: host-gateway` entry for portability off Docker Desktop.
 
 ---
 

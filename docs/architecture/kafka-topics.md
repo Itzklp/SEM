@@ -148,3 +148,12 @@ requested"; that is a synchronous Redis read on the hot path (ADR-002). There is
 happen in the same synchronous call in `fraud-api` (ADR-003), so there is no intermediate
 state worth publishing separately — the original proposal sketch's finer-grained topic
 list was collapsed for the same reason ADR-004 collapsed the service list.
+
+**Message headers (Phase 7, ADR-007).** Every message the outbox relay publishes
+carries a `traceparent` header (W3C Trace Context) — the value persisted on the
+originating `outbox_events.trace_context` row. Every consumer extracts it before
+processing, so a Kafka hop does not start a disconnected trace. Not part of the
+payload schema (it travels out-of-band, same as any other Kafka message metadata),
+and consumer logic must not depend on its presence — a missing header (tracing
+disabled, or a pre-migration-0003 row) degrades to "process normally, just without
+a linked trace," never an error.
