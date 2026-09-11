@@ -6,11 +6,12 @@ import {
   transitionTransaction,
   type FraudDecision,
   type DegradedReason,
+  type FeatureVector,
   type Transaction,
 } from '@fraudguard/domain';
 import {
+  getFeatureVector,
   getIdempotentResult,
-  getPlaceholderFeatureVector,
   storeIdempotentResult,
 } from '@fraudguard/feature-store';
 import type { DecisionRow, TransactionRepository } from '@fraudguard/persistence';
@@ -87,11 +88,13 @@ export class ScoringService {
     let status = transitionTransaction(transaction.status, 'VALIDATED');
 
     // --- VALIDATED -> FEATURES_LOADED ---------------------------------------
-    // Phase 3 placeholder (packages/feature-store): always 'unavailable'.
-    // This is honestly degraded, not faked — there is no real feature
-    // computation until Phase 4, so every Phase 3 decision correctly
-    // reports degraded=true, FEATURES_UNAVAILABLE (ADR-005).
-    const features = getPlaceholderFeatureVector(request.userId);
+    // Real behavioural features (Phase 4, FR-002, ADR-002). The write side
+    // (`recordTransactionFeatures`) deliberately does NOT run here — per
+    // ARCHITECTURE.md's service-responsibility table, feature *writes* are
+    // the cold path's job (Phase 6's event-worker, consuming
+    // `transaction.decided`), so that a slow aggregation write can never
+    // slow an authorization. Only the read happens on the hot path.
+    const features = await this.tryGetFeatureVector(transaction);
     status = transitionTransaction(status, 'FEATURES_LOADED');
     const degraded = features.source !== 'live';
     const degradedReason: DegradedReason = degraded ? 'FEATURES_UNAVAILABLE' : 'NONE';
@@ -157,6 +160,29 @@ export class ScoringService {
       degradedReason: decisionRow.degradedReason as ScoreResponse['degradedReason'],
       processingTimeMs,
     };
+  }
+
+  /** ADR-005's Redis cautious-open fallback, made explicitly here (not inside `@fraudguard/feature-store`, which throws on failure by design — see `getFeatureVector`'s doc comment). A degraded vector is indistinguishable, to every downstream consumer, from Phase 3's "no real features yet" placeholder — same shape, same handling, different cause. */
+  private async tryGetFeatureVector(transaction: Transaction): Promise<FeatureVector> {
+    try {
+      return await getFeatureVector(this.redis, {
+        userId: transaction.userId,
+        deviceId: transaction.deviceId,
+        merchantId: transaction.merchantId,
+        ipAddress: transaction.ipAddress,
+      });
+    } catch (error) {
+      this.logger.warn(
+        { err: error, transactionId: transaction.transactionId },
+        'Feature fetch failed (Redis unavailable) — proceeding cautious-open with declared defaults',
+      );
+      return {
+        userId: transaction.userId,
+        computedAt: new Date(),
+        source: 'unavailable',
+        features: {},
+      };
+    }
   }
 
   /** ADR-005: a Redis failure here means "unknown", not "not a duplicate" — falls through to the DB backstop rather than crashing the request. */
