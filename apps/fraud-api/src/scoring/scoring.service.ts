@@ -17,6 +17,12 @@ import {
   getIdempotentResult,
   storeIdempotentResult,
 } from '@fraudguard/feature-store';
+import {
+  fraudDecisionsTotal,
+  fraudScoreDurationSeconds,
+  measure,
+  transactionsTotal,
+} from '@fraudguard/observability';
 import type { DecisionRow, TransactionRepository } from '@fraudguard/persistence';
 import { Inject, Injectable } from '@nestjs/common';
 import type { Redis } from 'ioredis';
@@ -65,14 +71,23 @@ export class ScoringService {
     const startedAt = Date.now();
 
     // --- Idempotency fast path (FR-017) ------------------------------------
-    const cached = await this.tryGetIdempotentResult(request.transactionId);
+    const cached = await measure(
+      {
+        span: 'score.idempotency_check',
+        histogram: fraudScoreDurationSeconds,
+        labels: { stage: 'idempotency_check' },
+      },
+      () => this.tryGetIdempotentResult(request.transactionId),
+    );
     if (cached) {
+      transactionsTotal.inc({ replay: 'true' });
       this.logger.info(
         { transactionId: request.transactionId },
         'Duplicate transaction — returning cached decision',
       );
       return cached;
     }
+    transactionsTotal.inc({ replay: 'false' });
 
     // --- RECEIVED -> VALIDATED (Zod already validated the wire shape; this
     // constructs the domain Transaction, which re-checks domain invariants) --
@@ -101,13 +116,23 @@ export class ScoringService {
     // the cold path's job (Phase 6's event-worker, consuming
     // `transaction.decided`), so that a slow aggregation write can never
     // slow an authorization. Only the read happens on the hot path.
-    const features = await this.tryGetFeatureVector(transaction);
+    const features = await measure(
+      {
+        span: 'score.feature_fetch',
+        histogram: fraudScoreDurationSeconds,
+        labels: { stage: 'feature_fetch' },
+      },
+      () => this.tryGetFeatureVector(transaction),
+    );
     status = transitionTransaction(status, 'FEATURES_LOADED');
     const degraded = features.source !== 'live';
     const degradedReason: DegradedReason = degraded ? 'FEATURES_UNAVAILABLE' : 'NONE';
 
     // --- FEATURES_LOADED -> SCORED ------------------------------------------
-    const scoringResult = await this.scoringProvider.score({ transaction, features });
+    const scoringResult = await measure(
+      { span: 'score.score', histogram: fraudScoreDurationSeconds, labels: { stage: 'score' } },
+      () => this.scoringProvider.score({ transaction, features }),
+    );
     status = transitionTransaction(status, 'SCORED');
 
     // --- SCORED -> DECIDED ---------------------------------------------------
@@ -115,14 +140,27 @@ export class ScoringService {
     // via the admin endpoint (admin/policy.controller.ts) takes effect on
     // the very next request, with no restart (PolicyStore's doc comment).
     const policy = this.policyStore.get();
-    const decision = decide(scoringResult.score, policy, degraded);
+    // `decide()`/`buildReasons()` are synchronous and in-memory — no
+    // `await` inside, so this is `() => Promise.resolve(...)` rather than
+    // an `async` arrow (`@typescript-eslint/require-await`). Still timed
+    // via `measure()` like every other stage: cheap today is not a
+    // guarantee it stays cheap, and ADR-003 asks for every stage's timing.
+    const { decision, reasons } = await measure(
+      { span: 'score.decide', histogram: fraudScoreDurationSeconds, labels: { stage: 'decide' } },
+      () => {
+        const decidedValue = decide(scoringResult.score, policy, degraded);
+        // FR-007's floor: every non-ALLOW decision carries at least one
+        // reason, even if zero rules triggered (the model or behavioural
+        // signal alone can push the score past a threshold) — enforced
+        // once, here, rather than trusted to every provider individually.
+        return Promise.resolve({
+          decision: decidedValue,
+          reasons: buildReasons(scoringResult.riskFactors, decidedValue),
+        });
+      },
+    );
     status = transitionTransaction(status, 'DECIDED');
     const decidedTransaction: Transaction = { ...transaction, status };
-    // FR-007's floor: every non-ALLOW decision carries at least one
-    // reason, even if zero rules triggered (the model or behavioural
-    // signal alone can push the score past a threshold) — enforced once,
-    // here, rather than trusted to every provider individually.
-    const reasons = buildReasons(scoringResult.riskFactors, decision);
 
     const processingTimeMs = Date.now() - startedAt;
     const fraudDecision: FraudDecision = {
@@ -138,6 +176,7 @@ export class ScoringService {
       decidedAt: new Date(),
       processingTimeMs,
     };
+    fraudDecisionsTotal.inc({ decision, degraded: String(degraded) });
 
     // --- Persist (ADR-006: decision write, one transaction) -----------------
     // The outbox rows are written atomically with the decision itself —
@@ -147,10 +186,14 @@ export class ScoringService {
     // nothing here talks to Kafka (ADR-001 — enforced by the hot-path
     // architecture test's import scan).
     const outboxEventInputs = buildOutboxEvents(decidedTransaction, fraudDecision);
-    const persisted = await this.transactionRepository.insertScored(
-      decidedTransaction,
-      fraudDecision,
-      outboxEventInputs,
+    const persisted = await measure(
+      { span: 'score.persist', histogram: fraudScoreDurationSeconds, labels: { stage: 'persist' } },
+      () =>
+        this.transactionRepository.insertScored(
+          decidedTransaction,
+          fraudDecision,
+          outboxEventInputs,
+        ),
     );
     if (persisted.wasExisting) {
       // Redis missed it (down, or a race), but the database's unique

@@ -9,6 +9,7 @@
     { "path": "../../packages/contracts" },
     { "path": "../../packages/domain" },
     { "path": "../../packages/feature-store" },
+    { "path": "../../packages/observability" },
     { "path": "../../packages/persistence" }
   ],
   "include": ["src/**/*.ts"],
