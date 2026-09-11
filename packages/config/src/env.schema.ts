@@ -83,7 +83,15 @@ export const rawEnvSchema = z.object({
   OUTBOX_RETENTION_HOURS: z.coerce.number().int().positive().default(24),
 
   // --- Scoring provider (CON-005) --------------------------------------------
-  SCORING_PROVIDER: z.enum(['stub', 'rules', 'ml']).default('stub'),
+  // Default is 'rules' as of Phase 5: RuleBasedScoringProvider is the
+  // system's real, demonstrable, zero-ML scorer (docs/ROADMAP.md Phase 5
+  // gate). 'stub' remains available and meaningful on its own — a
+  // genuinely simpler deterministic baseline, not a discarded Phase 3
+  // leftover — but it is no longer the intended default now that a
+  // complete scorer exists. 'ml' is not yet implemented (Phase 10) and
+  // will fail at provider construction if selected — see
+  // scoring-provider.factory.ts in apps/fraud-api.
+  SCORING_PROVIDER: z.enum(['stub', 'rules', 'ml']).default('rules'),
   ML_SERVICE_URL: z.string().url().default('http://localhost:8000'),
   ML_TIMEOUT_MS: z.coerce.number().int().positive().default(30),
   ML_CIRCUIT_BREAKER_THRESHOLD: z.coerce.number().int().positive().default(5),
@@ -99,6 +107,19 @@ export const rawEnvSchema = z.object({
   SCORE_WEIGHT_RULES: z.coerce.number().min(0).max(1).default(0.5),
   SCORE_WEIGHT_MODEL: z.coerce.number().min(0).max(1).default(0.35),
   SCORE_WEIGHT_BEHAVIOURAL: z.coerce.number().min(0).max(1).default(0.15),
+
+  // --- Rule thresholds (FR-003) — "declared as data/config, not embedded
+  // in controllers". Every default here is an explicit, documented
+  // ASSUMPTION (@fraudguard/domain's rule files carry the same note) —
+  // there is no labelled fraud dataset in this project's scope to tune
+  // against. Revisit with measurement once demo/load traffic exists.
+  RULE_VELOCITY_MAX_5M: z.coerce.number().positive().default(10),
+  RULE_VELOCITY_MAX_1H: z.coerce.number().positive().default(20),
+  RULE_AMOUNT_DEVIATION_MULTIPLIER: z.coerce.number().positive().default(5),
+  RULE_DEVICE_MAX_TRANSACTIONS: z.coerce.number().positive().default(50),
+  RULE_GEO_MAX_DISTINCT_LOCATIONS_24H: z.coerce.number().positive().default(4),
+  RULE_FAILED_MAX_10M: z.coerce.number().positive().default(3),
+  RULE_MERCHANT_RISK_THRESHOLD: z.coerce.number().min(0).max(1).default(0.7),
 
   // --- Security ---------------------------------------------------------------
   AUTH_JWT_SECRET: z.string().min(32, 'AUTH_JWT_SECRET must be at least 32 characters'),
