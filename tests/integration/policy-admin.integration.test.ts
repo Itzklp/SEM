@@ -51,12 +51,20 @@ describe('admin: runtime policy configuration (FR-006)', () => {
       audience: config.security.jwt.audience,
       privileges: ['score'],
     });
-    await redis.del('idem:policy_admin_demo');
-    await persistence.hotPool.query('DELETE FROM decisions WHERE transaction_id = $1', [
-      'policy_admin_demo',
+    // outbox_events too — a deterministic `event_id` (ADR-006) from a
+    // stale prior run collides with a fresh insert for the same
+    // transactionId otherwise. See demo-scenarios.integration.test.ts's
+    // identical fix for the failure this produces if skipped.
+    const policyAdminTransactionIds = ['policy_admin_demo', 'policy_admin_demo_2'];
+    await redis.del(...policyAdminTransactionIds.map((id) => `idem:${id}`));
+    await persistence.hotPool.query('DELETE FROM outbox_events WHERE aggregate_id = ANY($1)', [
+      policyAdminTransactionIds,
     ]);
-    await persistence.hotPool.query('DELETE FROM transactions WHERE transaction_id = $1', [
-      'policy_admin_demo',
+    await persistence.hotPool.query('DELETE FROM decisions WHERE transaction_id = ANY($1)', [
+      policyAdminTransactionIds,
+    ]);
+    await persistence.hotPool.query('DELETE FROM transactions WHERE transaction_id = ANY($1)', [
+      policyAdminTransactionIds,
     ]);
   });
 
