@@ -414,30 +414,142 @@ figure) this kind of drift is exactly why that phase exists.
 
 ---
 
-## Phase 6 — Events, audit and review
+## Phase 6 — Events, audit and review ✅ **COMPLETE**
 
 |                  |                                                                                 |
 | ---------------- | ------------------------------------------------------------------------------- |
 | **Goal**         | The cold path, with the durability and idempotency guarantees actually verified |
-| **Blocked by**   | Phase 5                                                                         |
+| **Blocked by**   | ~~Phase 5~~ complete                                                            |
 | **Requirements** | FR-008 – FR-011, NFR-012, NFR-013                                               |
 
-**Deliverables**
+**Delivered**
 
-- Outbox table, relay with `SKIP LOCKED`, backoff and dead-lettering (ADR-006)
-- Kafka topics; producers and consumers in `event-worker`
-- Append-only audit persistence
-- Case creation on `REVIEW`, idempotent
-- `apps/review-api`: case queue, `APPROVE` / `BLOCK` / `ESCALATE`, transaction and decision queries
-- Consumer idempotency with event-ID deduplication
-- DLQ handling and inspection
+- `packages/messaging` — thin Kafka producer/consumer wrappers (ADR-001's cold-path-only
+  boundary, enforced by the same hot-path architecture test Phase 3 built: nothing under
+  it is importable from `apps/fraud-api/src/scoring`). `consumeWithDlq()` implements the
+  per-topic retry+DLQ shape `kafka-topics.md` names, once, rather than reinventing it per
+  consumer
+- `packages/persistence`: `outbox_events`, `fraud_cases`, `audit_events` tables
+  (migration `0002`) matching ADR-006/`data-model.md` exactly; `OutboxRepository`,
+  `CaseRepository`, `AuditRepository`. `TransactionRepository.insertScored` now writes
+  the decision AND its outbox events in the same transaction — ADR-006's whole point,
+  not a separate step that could fail independently
+- `apps/event-worker` (new app) — the outbox relay plus three independent Kafka
+  consumer groups (feature-update, case-creation, audit), each able to lag or fail
+  without blocking the others (`kafka-topics.md`'s per-consumer-group isolation,
+  actually built). The relay and all three consumers run in this one process
+  (ARCHITECTURE.md §12 question 1, now resolved: co-located, not a separate deployable
+  — nothing about this prototype's load justifies a fourth one)
+- `apps/review-api` (new app) — case queue (`GET /fraud/cases`, filterable, paginated),
+  `POST /fraud/cases/:id/review` (`APPROVE`/`BLOCK`/`ESCALATE`, reviewer identity from
+  the authenticated token, never the body — ASM-006), `GET /transactions/:id`'s full
+  recoverable basis. Its own Postgres pool (`coldDb`) — never `fraud-api`'s `hotPool` —
+  is ADR-004's bulkhead, not a style choice
+- `fraud-api` writes `transaction.received`/`transaction.decided` outbox events
+  atomically with every decision (`build-outbox-events.ts`); `transactionDecidedEvent`'s
+  payload was extended (amount/merchantId/deviceId/ipAddress/timestamp) so the
+  feature-update consumer has everything it needs from one event, not two correlated by
+  hand
+- Deterministic event IDs (`deterministicEventId`, a real UUID v5 — RFC 4122 §4.3 —
+  computed with `node:crypto`, not the `uuid` package) honour ADR-006's "republishing
+  the same logical event produces the same id" literally, not just in spirit
+- `docker-compose.yml`: a second Kafka listener (`PLAINTEXT_HOST`, port 9094) — found
+  necessary, not assumed: Kafka's client protocol redirects every produce/fetch to
+  whatever address the broker _advertises_, and the original single listener advertises
+  `kafka:9092`, which resolves nowhere outside the compose network. `event-worker` runs
+  on the host (`pnpm dev`, the same way `fraud-api` always has), so it needs a listener
+  advertised as `localhost:9094` instead — a real environment gap, caught by trying to
+  actually connect, not by reading the compose file twice
 
-**Exit criteria**
+**Deliberate deviations, recorded rather than silently taken:**
 
-- Every decision is recoverable with its full basis
-- **Duplicate delivery test passes** — no duplicate cases, no double-counted features
-- Kafka stopped for the duration of a load run: authorizations unaffected, outbox drains fully on recovery
-- Illegal case transitions rejected
+1. **No generic `audit.events` topic.** The audit-persistence consumer subscribes
+   directly to the four domain topics (`transaction.received`, `transaction.decided`,
+   `review.created`, `review.completed`) and derives its own rows from them, instead of
+   every producer ALSO writing a second, redundant generic event per action. Recorded in
+   `packages/contracts/src/events/topics.ts` and `kafka-topics.md` itself — not hidden.
+2. **The outbox relay never dead-letters a row.** ADR-006 mentions moving rows past a
+   retry limit to a dead-letter state; this implementation retries every publish
+   failure indefinitely instead. A Kafka _outage_ must drain fully on recovery (this
+   phase's own exit criterion) — a retry-limit policy would wrongly abandon every
+   pending row during a sustained-but-recoverable outage. `consumeWithDlq`'s Kafka
+   _consumers_ (a materially different failure mode — a malformed message, not a down
+   broker) DO dead-letter, per `<topic>.dlq`, exactly as specified.
+3. **`audit_events`'s append-only guarantee is application-level, not a database
+   `REVOKE`.** This prototype connects as one Postgres role for every service,
+   including migrations — revoking privileges from that role would revoke them from
+   the migration runner too, and if it's the database owner (it is, locally), a
+   `REVOKE` has no effect regardless. Real least-privilege roles are Phase 11's.
+4. **Auth guards, the exception filter, and the Zod pipe are duplicated into
+   `review-api`**, not shared with `fraud-api` via a new package — ~80 lines, two
+   consumers, no present payoff for the extraction. A third consumer needing them (or a
+   real divergence between the two copies) is the actual signal to extract one.
+
+**Exit criteria — all verified against real Postgres, Redis AND Kafka**
+
+- ✅ Every decision is recoverable with its full basis — `IT-EVT-001`
+  (`event-worker.integration.test.ts`): the real relay publishes to real Kafka, a real
+  consumer reads it back, `audit_events` ends up with both the `transaction.received`
+  and `transaction.decided` rows
+- ✅ **Duplicate delivery test passes** — `IT-EVT-002`/`IT-EVT-003`: the same published
+  event fed into the audit and feature-update consumers twice produces exactly one
+  audit row and an unchanged feature count; case-creation fed the same `transaction
+.decided` payload twice creates exactly one case (`fraud_cases.transaction_id`'s
+  UNIQUE constraint is what actually enforces it, not consumer-side bookkeeping)
+- ✅ Kafka stopped for the duration of a load run: authorizations unaffected, outbox
+  drains fully on recovery — `kafka-outage.resilience.test.ts` genuinely stops and
+  restarts the real `kafka` container. A request during the outage still returns `200`
+  with its outbox rows durably written (`published_at IS NULL` throughout); every row
+  drains once the broker is reachable again
+- ✅ Illegal case transitions rejected — `IT-REV-002`: reviewing an already-`APPROVED`
+  case returns `400 ILLEGAL_TRANSITION`, caught by `packages/domain`'s Phase 1
+  `applyCaseAction` state machine, not a new check written for this phase
+
+**Three real bugs the tests caught, not filed away:**
+
+1. **An envelope/payload contract mismatch between consumers.** The feature-update and
+   case-creation consumers parsed their Kafka message as if it were already unwrapped
+   (`schema.shape.payload.parse(message)`), while the audit consumer (correctly) parsed
+   the full envelope (`schema.parse(message)`). Every field came back "Required" —
+   caught immediately by `event-worker.integration.test.ts`, which calls all three
+   consumers against the same real published row. Fixed by parsing the full envelope
+   everywhere, with the distinction now called out in each file's doc comment.
+2. **`POST /fraud/cases/:id/review` returned `201`, not `200`.** NestJS's bare `@Post()`
+   defaults to `201 Created`; this endpoint transitions an EXISTING case and never
+   creates a new resource — `openapi.yaml` already documented `200`. Fixed with an
+   explicit `@HttpCode(HttpStatus.OK)`, caught by `review-api.integration.test.ts`
+   actually asserting the status code rather than just the body.
+3. **Two Phase 5 integration test files didn't clean up `outbox_events`.**
+   `demo-scenarios.integration.test.ts` and `policy-admin.integration.test.ts` predate
+   this phase's tables; their cleanup blocks only knew about `decisions`/`transactions`.
+   Because outbox `event_id`s are DETERMINISTIC (ADR-006), a second local run deleted
+   and re-inserted the same `transactionId` but collided on a leftover outbox row's
+   `UNIQUE(event_id)`, rolling back the whole insert and turning every demo request
+   into a `500`. Fixed by extending both files' cleanup — and, separately, the new
+   `kafka-outage.resilience.test.ts` was initially missing its OWN Redis idempotency
+   cleanup (the same bug class Phase 5 already found twice), caught the same way before
+   it ever reached a commit.
+
+**One environmental finding, fixed at the infrastructure layer:** `event-worker`
+(running on the host, like `fraud-api`) could not produce or consume anything —
+Kafka's broker advertises `kafka:9092` to every client, which only resolves inside the
+Docker Compose network. Fixed with a second listener (`PLAINTEXT_HOST`, advertised as
+`localhost:9094`) in `docker-compose.yml`, confirmed end-to-end with a real producer
+and consumer round-trip before building anything on top of it.
+
+**One tooling finding:** a Jest suite that stops and restarts a real Kafka container
+(`kafka-outage.resilience.test.ts`) reliably passed its own assertions in under a
+minute but then left the process alive well past Jest's "did not exit" warning — most
+likely a kafkajs internal reconnect timer surviving the broker's stop/start cycle, not
+an unclosed resource this test itself owns (`producer.disconnect()` is called, and is
+confirmed to run). `pnpm test:resilience` now runs with `--forceExit`, scoped to this
+one script rather than applied globally, where it would mask a real leak elsewhere.
+
+**FR-014 status: partial, honestly.** `GET /transactions/:id` is built and verified;
+`openapi.yaml` does not yet define a transaction _list_ endpoint (only case listing, via
+`GET /fraud/cases`), so pagination is proved there, not for transactions. Not expanded
+here because it was not asked for by this phase's own deliverable list — added the
+moment a real consumer needs it, not speculatively.
 
 ---
 
