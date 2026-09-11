@@ -4,6 +4,7 @@ export * from './dto/scoring.dto';
 export * from './dto/transaction.dto';
 export * from './dto/case.dto';
 export * from './dto/model.dto';
+export * from './dto/policy.dto';
 
 export * from './events/envelope';
 export * from './events/transaction-events';

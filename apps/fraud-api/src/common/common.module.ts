@@ -7,18 +7,34 @@ import {
   PERSISTENCE_CONTEXT,
   TRANSACTION_REPOSITORY,
 } from './persistence.provider';
+import { policyStoreProvider, POLICY_STORE } from './policy-store';
 import { redisProvider, REDIS_CLIENT } from './redis.provider';
 
 /**
- * Config, logging, Redis and persistence are cross-cutting — every feature
- * module needs at least one of them. `@Global()` means declaring them once
- * here beats redeclaring the same providers per module (which would create
- * a second Redis connection pool, a second Postgres pool, etc. — a subtle
- * and expensive bug).
+ * Config, logging, Redis, persistence and the runtime policy store are
+ * cross-cutting — every feature module needs at least one of them.
+ * `@Global()` means declaring them once here beats redeclaring the same
+ * providers per module (which would create a second Redis connection
+ * pool, a second Postgres pool, or — for `PolicyStore` — a second,
+ * independently-mutable "current policy" that silently disagrees with
+ * the first).
  */
 @Global()
 @Module({
-  providers: [configProvider, loggerProvider, redisProvider, ...persistenceProviders],
-  exports: [APP_CONFIG, LOGGER, REDIS_CLIENT, PERSISTENCE_CONTEXT, TRANSACTION_REPOSITORY],
+  providers: [
+    configProvider,
+    loggerProvider,
+    redisProvider,
+    policyStoreProvider,
+    ...persistenceProviders,
+  ],
+  exports: [
+    APP_CONFIG,
+    LOGGER,
+    REDIS_CLIENT,
+    POLICY_STORE,
+    PERSISTENCE_CONTEXT,
+    TRANSACTION_REPOSITORY,
+  ],
 })
 export class CommonModule {}
