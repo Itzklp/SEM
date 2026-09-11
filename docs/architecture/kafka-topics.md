@@ -89,6 +89,19 @@ hardcoded constant).
 
 ## `audit.events`
 
+**Phase 6 implementation note:** this topic is not currently produced to.
+`apps/event-worker`'s audit-persistence consumer subscribes directly to
+`transaction.received`, `transaction.decided`, `review.created` and
+`review.completed` instead, deriving each `audit_events` row from the
+domain event itself (`packages/contracts/src/events/topics.ts` records the
+same deviation, next to the eventType→topic map). Adopting this generic
+topic as originally specified would mean every producer writing TWO
+outbox rows per action — the domain event and a second, redundant
+generic one — for no consumer that needs the generic shape today. The
+table below describes the original design; revisit it if a future
+consumer (Phase 10's model-registry auditing, most likely) genuinely
+needs the generic envelope rather than a specific one.
+
 |                          |                                                                                                                                                                                                                                                                                           |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Purpose**              | The generic, append-only trail behind FR-008 — "what happened, to what, when, and why", uniformly across every domain event, rather than one bespoke audit schema per action.                                                                                                             |
