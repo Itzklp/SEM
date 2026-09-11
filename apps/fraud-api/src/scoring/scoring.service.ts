@@ -28,6 +28,7 @@ import { TRANSACTION_REPOSITORY } from '../common/persistence.provider';
 import { POLICY_STORE, type PolicyStore } from '../common/policy-store';
 import { REDIS_CLIENT } from '../common/redis.provider';
 
+import { buildOutboxEvents } from './build-outbox-events';
 import { createScoringProvider } from './scoring-provider.factory';
 
 /**
@@ -139,9 +140,17 @@ export class ScoringService {
     };
 
     // --- Persist (ADR-006: decision write, one transaction) -----------------
+    // The outbox rows are written atomically with the decision itself —
+    // either the decision, both domain rows AND the outbox rows all
+    // exist, or none of them do. apps/event-worker's relay (Phase 6)
+    // picks these up after the response has already been returned;
+    // nothing here talks to Kafka (ADR-001 — enforced by the hot-path
+    // architecture test's import scan).
+    const outboxEventInputs = buildOutboxEvents(decidedTransaction, fraudDecision);
     const persisted = await this.transactionRepository.insertScored(
       decidedTransaction,
       fraudDecision,
+      outboxEventInputs,
     );
     if (persisted.wasExisting) {
       // Redis missed it (down, or a race), but the database's unique
