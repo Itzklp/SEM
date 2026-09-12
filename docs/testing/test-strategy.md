@@ -69,7 +69,13 @@ present, internals absent); the seeded generator's determinism.
 
 ### 3.2 Integration — `IT-`
 
-**Runs against:** real PostgreSQL, Redis and Kafka via Testcontainers.
+**Runs against:** real PostgreSQL, Redis and Kafka. **Deviation from this baseline,
+recorded at Phase 8 (docs/ROADMAP.md):** not Testcontainers — a persistent `docker
+compose` stack (`pnpm docker:up`), the same one every developer already runs for `pnpm
+dev`. Every test tier in this project assumes that stack is already up; Testcontainers
+would spin up a second, separate set of containers per run, redundant given this
+project's actual workflow and slower on this hardware for no isolation benefit this
+project's scope needs.
 **Speed:** a few minutes.
 
 Covers what mocks structurally cannot: SQL that is valid in the dialect, Redis data-type
