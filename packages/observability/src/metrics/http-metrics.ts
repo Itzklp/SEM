@@ -54,10 +54,18 @@ export function registerHttpMetrics(fastify: FastifyInstance, service: string): 
   fastify.addHook(
     'onResponse',
     (request: FastifyRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => {
-      activeRequests.dec({ service });
-
       const start = startedAt.get(request);
       startedAt.delete(request);
+      // `onResponse` fires for EVERY completed response regardless of
+      // whether a hook registered before this one (e.g.
+      // `load-shedding.ts`, which short-circuits in its own `onRequest`)
+      // ever let this one's `onRequest` run — decrementing unconditionally
+      // would let `active_requests` drift negative for exactly the
+      // requests that never got counted up. `start === undefined` is
+      // this hook's own record of "did I actually increment for this one".
+      if (start !== undefined) {
+        activeRequests.dec({ service });
+      }
       const durationSeconds =
         start === undefined ? 0 : Number(process.hrtime.bigint() - start) / 1e9;
 

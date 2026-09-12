@@ -23,8 +23,14 @@ import {
   measure,
   transactionsTotal,
 } from '@fraudguard/observability';
-import type { DecisionRow, TransactionRepository } from '@fraudguard/persistence';
-import { Inject, Injectable } from '@nestjs/common';
+import {
+  isPgConnectivityError,
+  type DecisionRow,
+  type OutboxEventInput,
+  type ScoredTransactionResult,
+  type TransactionRepository,
+} from '@fraudguard/persistence';
+import { Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
 
@@ -186,14 +192,11 @@ export class ScoringService {
     // nothing here talks to Kafka (ADR-001 — enforced by the hot-path
     // architecture test's import scan).
     const outboxEventInputs = buildOutboxEvents(decidedTransaction, fraudDecision);
-    const persisted = await measure(
-      { span: 'score.persist', histogram: fraudScoreDurationSeconds, labels: { stage: 'persist' } },
-      () =>
-        this.transactionRepository.insertScored(
-          decidedTransaction,
-          fraudDecision,
-          outboxEventInputs,
-        ),
+    const persisted = await this.persistOrFailClosed(
+      decidedTransaction,
+      fraudDecision,
+      outboxEventInputs,
+      request.transactionId,
     );
     if (persisted.wasExisting) {
       // Redis missed it (down, or a race), but the database's unique
@@ -227,6 +230,47 @@ export class ScoringService {
       degradedReason: decisionRow.degradedReason as ScoreResponse['degradedReason'],
       processingTimeMs,
     };
+  }
+
+  /**
+   * ADR-005's PostgreSQL fail-closed policy, made explicit here — unlike
+   * the Redis/feature-fetch fallback above, this one does NOT swallow the
+   * failure and carry on: "we cannot durably record this decision" is
+   * exactly the one case this system must refuse to paper over (an
+   * unrecorded decision is unauditable). `isPgConnectivityError()`
+   * distinguishes "Postgres is unreachable" from "this insert has a real
+   * bug" — only the former becomes a `503`; the latter must keep
+   * surfacing as a `500`, or a genuine defect starts looking like planned
+   * degradation the moment it ships.
+   */
+  private async persistOrFailClosed(
+    transaction: Transaction,
+    decision: FraudDecision,
+    outboxEventInputs: readonly OutboxEventInput[],
+    transactionId: string,
+  ): Promise<ScoredTransactionResult> {
+    try {
+      return await measure(
+        {
+          span: 'score.persist',
+          histogram: fraudScoreDurationSeconds,
+          labels: { stage: 'persist' },
+        },
+        () => this.transactionRepository.insertScored(transaction, decision, outboxEventInputs),
+      );
+    } catch (error) {
+      if (isPgConnectivityError(error)) {
+        this.logger.error(
+          { err: error, transactionId },
+          'PostgreSQL unreachable — failing closed per ADR-005, no decision recorded',
+        );
+        throw new ServiceUnavailableException({
+          code: 'DECISION_NOT_RECORDED',
+          message: 'Unable to durably record this decision right now. Retry shortly.',
+        });
+      }
+      throw error;
+    }
   }
 
   /** ADR-005's Redis cautious-open fallback, made explicitly here (not inside `@fraudguard/feature-store`, which throws on failure by design — see `getFeatureVector`'s doc comment). A degraded vector is indistinguishable, to every downstream consumer, from Phase 3's "no real features yet" placeholder — same shape, same handling, different cause. */
