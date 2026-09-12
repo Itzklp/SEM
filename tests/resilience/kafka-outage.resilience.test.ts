@@ -1,6 +1,3 @@
-import { execSync } from 'node:child_process';
-import { join } from 'node:path';
-
 import { loadConfig } from '@fraudguard/config';
 import { scoreResponseSchema, type ScoreRequest } from '@fraudguard/contracts';
 import { createKafkaClient, createProducer } from '@fraudguard/messaging';
@@ -21,53 +18,15 @@ import { HttpExceptionFilter } from '../../apps/fraud-api/src/common/http-except
 import { PERSISTENCE_CONTEXT } from '../../apps/fraud-api/src/common/persistence.provider';
 import { REDIS_CLIENT } from '../../apps/fraud-api/src/common/redis.provider';
 
-const REPO_ROOT = join(__dirname, '..', '..');
-// execSync has no timeout by default — an unresponsive docker daemon
-// would then block this ENTIRE process indefinitely, including Jest's
-// own per-test timeout (which relies on the event loop, and a
-// synchronous call blocks it). A bounded timeout here is what makes
-// "this test took too long" fail loudly instead of hanging the suite.
-const DOCKER_COMMAND_TIMEOUT_MS = 30_000;
+import {
+  dockerCompose,
+  ensureServiceHealthy,
+  isServiceHealthy,
+  sleep,
+  waitUntil,
+} from './docker-helpers';
 
-function dockerCompose(args: string): void {
-  execSync(`docker compose ${args}`, {
-    cwd: REPO_ROOT,
-    stdio: 'pipe',
-    timeout: DOCKER_COMMAND_TIMEOUT_MS,
-  });
-}
-
-function isKafkaHealthy(): boolean {
-  try {
-    const output = execSync('docker compose ps kafka --format "{{.Status}}"', {
-      cwd: REPO_ROOT,
-      stdio: 'pipe',
-      timeout: DOCKER_COMMAND_TIMEOUT_MS,
-    }).toString();
-    return output.includes('healthy');
-  } catch {
-    return false;
-  }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function waitUntil(
-  predicate: () => boolean,
-  timeoutMs: number,
-  intervalMs = 2_000,
-): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (predicate()) {
-      return true;
-    }
-    await sleep(intervalMs);
-  }
-  return predicate();
-}
+const isKafkaHealthy = (): boolean => isServiceHealthy('kafka');
 
 /**
  * Phase 6 exit criterion, verbatim (docs/ROADMAP.md): "Kafka stopped for
@@ -104,10 +63,7 @@ describe('resilience: Kafka outage does not affect fraud-api authorizations', ()
     // exact test could otherwise leave Kafka stopped, which would make
     // EVERY other integration test in the same CI run fail for a reason
     // that has nothing to do with what they're testing.
-    if (!isKafkaHealthy()) {
-      dockerCompose('start kafka');
-      await waitUntil(isKafkaHealthy, 90_000);
-    }
+    await ensureServiceHealthy('kafka');
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
@@ -152,10 +108,7 @@ describe('resilience: Kafka outage does not affect fraud-api authorizations', ()
     // Restored in beforeAll already if the test body itself failed
     // before reaching its own restart step — this is the final backstop
     // so a failure here never leaves Kafka down for whatever runs next.
-    if (!isKafkaHealthy()) {
-      dockerCompose('start kafka');
-      await waitUntil(isKafkaHealthy, 90_000);
-    }
+    await ensureServiceHealthy('kafka');
     await redis.quit();
     await closePersistenceContext(persistence);
     await app.close();
@@ -224,23 +177,41 @@ describe('resilience: Kafka outage does not affect fraud-api authorizations', ()
     // and actually being ready to accept a produce from this process
     // through the PLAINTEXT_HOST listener are not the same instant —
     // retry briefly rather than asserting success on the first attempt.
+    //
+    // Checks THIS test's own two rows directly, rather than trusting a
+    // single batch's publishedCount/failedCount — CAUGHT LIVE, running
+    // the full resilience suite together: every OTHER resilience test
+    // file creates real scored transactions and none of them runs the
+    // relay (correctly — draining the outbox isn't what they're
+    // testing), so a real backlog of OTHER aggregates' unpublished rows
+    // genuinely accumulates in the same table. `processUnpublishedBatch`
+    // drains oldest-first with `batchSize: 50` — with more than 50
+    // unrelated rows ahead of this one in the queue, a single batch's
+    // publishedCount can be a full 50 of SOMEONE ELSE's rows while this
+    // demo's own two are still sitting unpublished, several batches
+    // back. Looping until THESE rows specifically are published is
+    // correct regardless of how much unrelated backlog exists — which
+    // is also the realistic production shape (the outbox holds many
+    // aggregates' rows at once, not one demo's in isolation).
     let drained = false;
-    for (let attempt = 0; attempt < 10 && !drained; attempt += 1) {
+    for (let attempt = 0; attempt < 20 && !drained; attempt += 1) {
       try {
-        const result = await runOutboxRelayOnce({
+        await runOutboxRelayOnce({
           outboxRepository,
           producer,
           logger,
           batchSize: 50,
         });
-        if (result.publishedCount >= 2 && result.failedCount === 0) {
-          drained = true;
-        }
       } catch {
         // not ready yet — retried below
       }
+      const rows = await persistence.hotPool.query<{ published_at: string | null }>(
+        'SELECT published_at FROM outbox_events WHERE aggregate_id = $1',
+        ['kafka_outage_demo'],
+      );
+      drained = rows.rows.length === 2 && rows.rows.every((r) => r.published_at !== null);
       if (!drained) {
-        await sleep(2_000);
+        await sleep(1_000);
       }
     }
     await producer.disconnect();
