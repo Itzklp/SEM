@@ -38,6 +38,23 @@ export function createPools(config = loadConfig()): { hotPool: Pool; coldPool: P
     statement_timeout: 5000,
   });
 
+  // node-postgres's documented gotcha, found live by Phase 8's PostgreSQL
+  // resilience test before it was added here: a `Pool` emits its own
+  // `'error'` event when an IDLE pooled client errors (e.g. the server
+  // going away) — not the same thing as a `.query()` call rejecting. An
+  // EventEmitter's `'error'` event with no listener is fatal in Node
+  // (it rethrows, crashing the process). Without this handler, stopping
+  // Postgres with an idle connection sitting in the pool would crash
+  // `fraud-api` outright — the opposite of ADR-005's "fail closed with a
+  // 503", which requires the PROCESS to stay up to return that 503 at
+  // all. Deliberately a no-op beyond not crashing: there is no in-flight
+  // query to fail here (that error surfaces separately, to whichever
+  // `.query()` call was actually pending, and IS handled there —
+  // `ScoringService.persistOrFailClosed`); the pool itself already
+  // removes the dead client and opens a new one on the next checkout.
+  hotPool.on('error', () => undefined);
+  coldPool.on('error', () => undefined);
+
   return { hotPool, coldPool };
 }
 
