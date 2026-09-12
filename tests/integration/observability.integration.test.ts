@@ -4,6 +4,7 @@ import {
   createConsumer,
   createKafkaClient,
   createProducer,
+  type Admin,
   type Consumer,
 } from '@fraudguard/messaging';
 import { registry, runWithExtractedContext, startTracing } from '@fraudguard/observability';
@@ -220,33 +221,40 @@ describe('observability (integration): real metrics and real end-to-end trace pr
       expect(row.trace_context?.split('-')[1]).toBe(originalTraceId);
     }
 
-    // Real publish, real broker.
+    // Real consume, real broker — subscribed BEFORE publishing, reading
+    // only NEW messages (fromBeginning: false), not the DB column. CAUGHT
+    // LIVE: this test originally published first and started a FRESH
+    // `fromBeginning: true` consumer afterward — correct in isolation,
+    // but `transaction.decided` accumulates messages across every other
+    // integration/resilience test run in a long session, and scanning
+    // the whole topic from the start eventually exceeded this test's own
+    // 15s wait. Subscribing first and waiting for the group to actually
+    // reach `Stable` (not just "subscribe() resolved" — the same gap
+    // `tests/resilience/malformed-message.resilience.test.ts` found)
+    // means the publish below is only ever read as a brand-new message,
+    // regardless of how large the topic has grown.
     const config = loadConfig();
     const kafka = createKafkaClient(config);
-    const producer = createProducer(kafka);
-    await producer.connect();
-    const relayResult = await runOutboxRelayOnce({
-      outboxRepository,
-      producer,
-      logger,
-      batchSize: 50,
-    });
-    expect(relayResult.failedCount).toBe(0);
-    await producer.disconnect();
-
-    // Real consume, real broker — reads the header back, not the DB column.
-    const consumer: Consumer = createConsumer(kafka, `obs-trace-test-${Date.now()}`);
+    const admin: Admin = kafka.admin();
+    await admin.connect();
+    const consumerGroupId = `obs-trace-test-${Date.now()}`;
+    const consumer: Consumer = createConsumer(kafka, consumerGroupId);
     await consumer.connect();
-    await consumer.subscribe({ topic: 'transaction.decided', fromBeginning: true });
+    await consumer.subscribe({ topic: 'transaction.decided', fromBeginning: false });
 
-    const headerTraceparent = await new Promise<string | undefined>((resolve) => {
+    const headerTraceparentPromise = new Promise<string | undefined>((resolve) => {
       let resolved = false;
       const timeout = setTimeout(() => {
         if (!resolved) {
           resolved = true;
           resolve(undefined);
         }
-      }, 15_000);
+      }, 20_000);
+      // `.run()` is what actually triggers the group-join handshake —
+      // CAUGHT LIVE: an earlier version of this fix polled for `Stable`
+      // BEFORE ever calling `.run()`, so the group could never reach
+      // that state no matter how long it waited. Calling it here, before
+      // polling below, is what makes the poll meaningful at all.
       void consumer.run({
         eachMessage: ({ message }) => {
           const value = JSON.parse(message.value?.toString() ?? '{}') as { aggregateId?: string };
@@ -259,6 +267,34 @@ describe('observability (integration): real metrics and real end-to-end trace pr
         },
       });
     });
+
+    const deadline = Date.now() + 20_000;
+    let stable = false;
+    while (Date.now() < deadline) {
+      const { groups } = await admin.describeGroups([consumerGroupId]);
+      if (groups.every((g) => g.state === 'Stable')) {
+        stable = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    await admin.disconnect();
+    expect(stable).toBe(true);
+
+    // Real publish, real broker — only now, once the consumer is
+    // genuinely ready to receive it.
+    const producer = createProducer(kafka);
+    await producer.connect();
+    const relayResult = await runOutboxRelayOnce({
+      outboxRepository,
+      producer,
+      logger,
+      batchSize: 50,
+    });
+    expect(relayResult.failedCount).toBe(0);
+    await producer.disconnect();
+
+    const headerTraceparent = await headerTraceparentPromise;
     await consumer.disconnect();
 
     expect(headerTraceparent).toBeDefined();
@@ -273,5 +309,5 @@ describe('observability (integration): real metrics and real end-to-end trace pr
         span.end();
       });
     });
-  }, 20_000);
+  }, 60_000);
 });

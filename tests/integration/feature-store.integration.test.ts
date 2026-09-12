@@ -192,6 +192,7 @@ describe('feature-store (integration): real Redis', () => {
   // never silently lost — it just doesn't fail the build on this
   // specific number until Phase 9 can measure it properly.
   it('measures feature-fetch p99 latency against the 8ms stage budget', async () => {
+    const redisTimeoutMs = loadConfig().redis.timeoutMs;
     const userId = 'it_feat_003';
     const base = Date.UTC(2026, 5, 3, 0, 0, 0);
     // A moderately "busy" user: enough history that every window and
@@ -235,14 +236,37 @@ describe('feature-store (integration): real Redis', () => {
     const batchP99s: number[] = [];
     let reportedP50 = 0;
     let reportedMax = 0;
+    let timedOutSamples = 0;
 
     for (let batch = 0; batch < BATCHES; batch += 1) {
       const durationsMs: number[] = [];
       for (let i = 0; i < SAMPLES_PER_BATCH; i += 1) {
         const start = process.hrtime.bigint();
-        await getFeatureVector(redis, lookup, asOf);
-        const end = process.hrtime.bigint();
-        durationsMs.push(Number(end - start) / 1_000_000);
+        try {
+          await getFeatureVector(redis, lookup, asOf);
+          const end = process.hrtime.bigint();
+          durationsMs.push(Number(end - start) / 1_000_000);
+        } catch (error) {
+          // CAUGHT LIVE, running the FULL suite after a long session of
+          // heavy Docker/Kafka/Postgres/Redis activity from every OTHER
+          // test file: under enough host-level contention (the same
+          // RISK-001 effect this test already documents), a command can
+          // exceed `REDIS_TIMEOUT_MS` outright rather than merely
+          // running slow — ioredis throws "Command timed out" instead of
+          // resolving. Unguarded, that single throw aborted the ENTIRE
+          // measurement, which is strictly worse than this test's own
+          // stated philosophy ("a real number, loudly reported, not a
+          // hard gate on host noise"): a crash reports nothing at all.
+          // Recorded as a real (conservative — it only took AT LEAST
+          // this long) data point instead of discarded, so one timeout
+          // among hundreds of samples still shows up honestly in the
+          // percentiles rather than silently vanishing OR crashing the run.
+          timedOutSamples += 1;
+          durationsMs.push(redisTimeoutMs);
+          if (!(error instanceof Error) || !error.message.includes('timed out')) {
+            throw error; // a DIFFERENT failure is a real bug, not host noise — let it fail loudly.
+          }
+        }
       }
       durationsMs.sort((a, b) => a - b);
       const p50 = durationsMs[Math.floor(SAMPLES_PER_BATCH * 0.5)] ?? 0;
@@ -262,6 +286,9 @@ describe('feature-store (integration): real Redis', () => {
         `p99 per batch=[${batchP99s.map((v) => v.toFixed(3)).join(', ')}]ms, median p99=${medianP99.toFixed(3)}ms, ` +
         `last-batch p50=${reportedP50.toFixed(3)}ms max=${reportedMax.toFixed(3)}ms ` +
         `(MEASURED, co-located — see RISK-001)` +
+        (timedOutSamples > 0
+          ? ` — ${timedOutSamples}/${BATCHES * SAMPLES_PER_BATCH} samples hit the ${redisTimeoutMs}ms command timeout outright (recorded as ${redisTimeoutMs}ms, not discarded).`
+          : '') +
         (medianP99 >= ADR_002_BUDGET_MS
           ? ` — ABOVE the ${ADR_002_BUDGET_MS}ms ADR-002 budget; not failing the build on this number (see CAVEAT above), but look at this if it is now the norm.`
           : ''),
@@ -273,5 +300,10 @@ describe('feature-store (integration): real Redis', () => {
     // issuing far more round trips than intended), which would blow well
     // past this, not a few extra milliseconds of WSL2 networking jitter.
     expect(medianP99).toBeLessThan(100);
+    // A handful of outright timeouts under heavy host contention is the
+    // RISK-001 effect this file already documents; more than 10% of all
+    // samples timing out is a different thing — a real connectivity
+    // problem, not WSL2 jitter.
+    expect(timedOutSamples).toBeLessThan(BATCHES * SAMPLES_PER_BATCH * 0.1);
   });
 });
