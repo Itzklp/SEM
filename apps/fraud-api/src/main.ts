@@ -25,6 +25,7 @@ import pino from 'pino';
 
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/http-exception.filter';
+import { registerLoadShedding } from './common/load-shedding';
 import { registerSwagger } from './swagger';
 
 /**
@@ -52,8 +53,12 @@ async function bootstrap(): Promise<void> {
     },
   );
 
-  // ADR-005 overload policy: shed load with 429 above a concurrency
-  // ceiling rather than letting a queue grow past the latency budget.
+  // ADR-005's "Rate limiting" row: a per-client token bucket, keyed by
+  // IP by default — bounds how FAST one client can call this API.
+  // `registerLoadShedding` below is the DIFFERENT row ("Overload" — a
+  // concurrency CEILING, independent of which client or how spread out
+  // in time requests arrived); both are real, distinct mechanisms, not
+  // one covering the other.
   await app.register(rateLimit, {
     max: config.security.rateLimit.maxRequests,
     timeWindow: config.security.rateLimit.windowMs,
@@ -74,6 +79,15 @@ async function bootstrap(): Promise<void> {
     registerHttpMetrics(fastify, 'fraud-api');
     registerMetricsEndpoint(fastify, config.observability.metricsPath);
   }
+  // Registered AFTER registerHttpMetrics, deliberately: a SHED (429)
+  // request still passes through the metrics hooks first (so it shows
+  // up in request_duration_seconds/request_errors_total — you want to
+  // SEE shedding happening on a dashboard), then gets short-circuited
+  // here before ever reaching a route handler. ADR-005's "Overload" row,
+  // wired for real — MAX_CONCURRENT_REQUESTS existed as config since
+  // Phase 1 with nothing ever reading it until Phase 8's resilience
+  // suite went looking for what actually enforced it.
+  registerLoadShedding(fastify, config.security.maxConcurrentRequests);
 
   await registerSwagger(app, bootstrapLogger);
 

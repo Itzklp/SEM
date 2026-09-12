@@ -14,6 +14,9 @@ interface ErrorBody {
   details?: { field: string; message: string }[];
 }
 
+/** ADR-005's PostgreSQL fail-closed policy: the `Retry-After` value on every `503`. ASSUMED — short enough a client retrying in a loop doesn't wait long, long enough a container restart (Phase 2's measured ~10-20s) has a real chance of finishing first. Not yet tuned against a measured outage-duration distribution. */
+const SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS = 5;
+
 /**
  * Every error response — validation failure, auth failure, unhandled
  * exception — goes through here, so the wire shape (`errorResponseSchema`,
@@ -36,6 +39,14 @@ export class HttpExceptionFilter implements ExceptionFilter {
       const status = exception.getStatus();
       const body = exception.getResponse();
       const errorBody: ErrorBody = typeof body === 'string' ? { message: body } : body;
+
+      // ADR-005: every 503 (today, only ScoringService.persistOrFailClosed's
+      // PostgreSQL fail-closed path) tells the caller how long to wait
+      // before retrying, via the standard header — not a body field, so
+      // `errorResponseSchema`'s `.strict()` shape never needs to know about it.
+      if (HttpStatus[status] === 'SERVICE_UNAVAILABLE') {
+        void response.header('Retry-After', String(SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS));
+      }
 
       void response.status(status).send({
         error: {
