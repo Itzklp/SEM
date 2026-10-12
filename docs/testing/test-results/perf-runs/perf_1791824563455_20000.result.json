@@ -1,0 +1,284 @@
+{
+  "runId": "perf_1791824563455_20000",
+  "targetRps": 20000,
+  "exitCode": 0,
+  "elapsedSeconds": 58.96,
+  "client": {
+    "achievedRps": 1657.3630737923006,
+    "p50Ms": 0,
+    "p95Ms": 2774.0269,
+    "p99Ms": 3444.1037679999995,
+    "maxMs": 5786.495,
+    "httpReqFailedRate": null
+  },
+  "server": {
+    "count": 649,
+    "avgMs": 365.2259118644123,
+    "p50Ms": 0.63,
+    "p95Ms": 2343.52,
+    "p99Ms": 4323.96
+  },
+  "hotPath": {
+    "idempotency_check": {
+      "avgMs": 88.72761793240925,
+      "p99Ms": 256
+    },
+    "feature_fetch": {
+      "avgMs": 115.82358471172968,
+      "p99Ms": 256
+    },
+    "score": {
+      "avgMs": 1.0436439363817767,
+      "p99Ms": 12.83
+    },
+    "decide": {
+      "avgMs": 0.38168763419484353,
+      "p99Ms": 2.44
+    },
+    "persist": {
+      "avgMs": 12600.669573002775,
+      "p99Ms": 256
+    }
+  },
+  "shed429Count": 529,
+  "degradedCount": 0,
+  "unexpectedStatusCount": 86418,
+  "serverSideErrorCount": 546,
+  "fraudApiCpuPercent": 8.93,
+  "dockerStats": [
+    {
+      "fraudguard-grafana-1": {
+        "cpuPercent": 0.15,
+        "mem": "127.6MiB"
+      },
+      "fraudguard-prometheus-1": {
+        "cpuPercent": 33.87,
+        "mem": "76.57MiB"
+      },
+      "fraudguard-jaeger-1": {
+        "cpuPercent": 20.69,
+        "mem": "227.6MiB"
+      },
+      "fraudguard-kafka-1": {
+        "cpuPercent": 208.48,
+        "mem": "599.7MiB"
+      },
+      "fraudguard-postgres-1": {
+        "cpuPercent": 19.02,
+        "mem": "276.5MiB"
+      },
+      "fraudguard-redis-1": {
+        "cpuPercent": 6.45,
+        "mem": "34.65MiB"
+      }
+    },
+    {
+      "fraudguard-grafana-1": {
+        "cpuPercent": 0.09,
+        "mem": "127.6MiB"
+      },
+      "fraudguard-prometheus-1": {
+        "cpuPercent": 0.08,
+        "mem": "76.54MiB"
+      },
+      "fraudguard-jaeger-1": {
+        "cpuPercent": 0.08,
+        "mem": "227.6MiB"
+      },
+      "fraudguard-kafka-1": {
+        "cpuPercent": 188.92,
+        "mem": "667.2MiB"
+      },
+      "fraudguard-postgres-1": {
+        "cpuPercent": 617.3,
+        "mem": "280.9MiB"
+      },
+      "fraudguard-redis-1": {
+        "cpuPercent": 6.82,
+        "mem": "34.36MiB"
+      }
+    },
+    {
+      "fraudguard-grafana-1": {
+        "cpuPercent": 0.26,
+        "mem": "127.5MiB"
+      },
+      "fraudguard-prometheus-1": {
+        "cpuPercent": 0.74,
+        "mem": "76.58MiB"
+      },
+      "fraudguard-jaeger-1": {
+        "cpuPercent": 0.02,
+        "mem": "227.7MiB"
+      },
+      "fraudguard-kafka-1": {
+        "cpuPercent": 175.51,
+        "mem": "567MiB"
+      },
+      "fraudguard-postgres-1": {
+        "cpuPercent": 192.93,
+        "mem": "302.6MiB"
+      },
+      "fraudguard-redis-1": {
+        "cpuPercent": 5.75,
+        "mem": "34.81MiB"
+      }
+    },
+    {
+      "fraudguard-grafana-1": {
+        "cpuPercent": 0.03,
+        "mem": "127.5MiB"
+      },
+      "fraudguard-prometheus-1": {
+        "cpuPercent": 0,
+        "mem": "76.58MiB"
+      },
+      "fraudguard-jaeger-1": {
+        "cpuPercent": 0.04,
+        "mem": "227.7MiB"
+      },
+      "fraudguard-kafka-1": {
+        "cpuPercent": 115.25,
+        "mem": "565.5MiB"
+      },
+      "fraudguard-postgres-1": {
+        "cpuPercent": 167.36,
+        "mem": "332.5MiB"
+      },
+      "fraudguard-redis-1": {
+        "cpuPercent": 3.26,
+        "mem": "35.05MiB"
+      }
+    },
+    {
+      "fraudguard-grafana-1": {
+        "cpuPercent": 0.04,
+        "mem": "127.5MiB"
+      },
+      "fraudguard-prometheus-1": {
+        "cpuPercent": 0,
+        "mem": "76.7MiB"
+      },
+      "fraudguard-jaeger-1": {
+        "cpuPercent": 0.04,
+        "mem": "227.7MiB"
+      },
+      "fraudguard-kafka-1": {
+        "cpuPercent": 207.57,
+        "mem": "676.3MiB"
+      },
+      "fraudguard-postgres-1": {
+        "cpuPercent": 115.62,
+        "mem": "310MiB"
+      },
+      "fraudguard-redis-1": {
+        "cpuPercent": 6.29,
+        "mem": "35.13MiB"
+      }
+    },
+    {
+      "fraudguard-grafana-1": {
+        "cpuPercent": 0.03,
+        "mem": "127.3MiB"
+      },
+      "fraudguard-prometheus-1": {
+        "cpuPercent": 0.97,
+        "mem": "74.26MiB"
+      },
+      "fraudguard-jaeger-1": {
+        "cpuPercent": 0.03,
+        "mem": "227.6MiB"
+      },
+      "fraudguard-kafka-1": {
+        "cpuPercent": 1.07,
+        "mem": "576.1MiB"
+      },
+      "fraudguard-postgres-1": {
+        "cpuPercent": 47.23,
+        "mem": "298.6MiB"
+      },
+      "fraudguard-redis-1": {
+        "cpuPercent": 7.58,
+        "mem": "35.16MiB"
+      }
+    },
+    {
+      "fraudguard-grafana-1": {
+        "cpuPercent": 0.03,
+        "mem": "127.3MiB"
+      },
+      "fraudguard-prometheus-1": {
+        "cpuPercent": 0.61,
+        "mem": "74.27MiB"
+      },
+      "fraudguard-jaeger-1": {
+        "cpuPercent": 14.49,
+        "mem": "227.9MiB"
+      },
+      "fraudguard-kafka-1": {
+        "cpuPercent": 2,
+        "mem": "576.3MiB"
+      },
+      "fraudguard-postgres-1": {
+        "cpuPercent": 7.6,
+        "mem": "298.6MiB"
+      },
+      "fraudguard-redis-1": {
+        "cpuPercent": 8.23,
+        "mem": "35.34MiB"
+      }
+    },
+    {
+      "fraudguard-grafana-1": {
+        "cpuPercent": 0.69,
+        "mem": "127.3MiB"
+      },
+      "fraudguard-prometheus-1": {
+        "cpuPercent": 0.04,
+        "mem": "74.94MiB"
+      },
+      "fraudguard-jaeger-1": {
+        "cpuPercent": 16.5,
+        "mem": "227.7MiB"
+      },
+      "fraudguard-kafka-1": {
+        "cpuPercent": 161.56,
+        "mem": "615.9MiB"
+      },
+      "fraudguard-postgres-1": {
+        "cpuPercent": 16.33,
+        "mem": "299.5MiB"
+      },
+      "fraudguard-redis-1": {
+        "cpuPercent": 8.45,
+        "mem": "35.41MiB"
+      }
+    },
+    {
+      "fraudguard-grafana-1": {
+        "cpuPercent": 0.05,
+        "mem": "127.3MiB"
+      },
+      "fraudguard-prometheus-1": {
+        "cpuPercent": 0,
+        "mem": "74.94MiB"
+      },
+      "fraudguard-jaeger-1": {
+        "cpuPercent": 0.02,
+        "mem": "227.7MiB"
+      },
+      "fraudguard-kafka-1": {
+        "cpuPercent": 1.39,
+        "mem": "577.5MiB"
+      },
+      "fraudguard-postgres-1": {
+        "cpuPercent": 81.72,
+        "mem": "300.7MiB"
+      },
+      "fraudguard-redis-1": {
+        "cpuPercent": 10.99,
+        "mem": "35.75MiB"
+      }
+    }
+  ]
+}

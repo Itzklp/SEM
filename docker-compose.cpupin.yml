@@ -1,0 +1,15 @@
+# Phase 9 (NFR-001/002/004) — RISK-001 mitigation B. Not part of the normal
+# stack; applied only for the CPU-pinning measurement in
+# docs/testing/test-results/performance-report.md §4, then removed. Pins the
+# containerised dependencies to logical CPUs 0-3 (2 of this laptop's 4
+# physical cores, cpuset maps straight to a cgroup inside Docker Desktop's
+# WSL2 VM) so the load generator, pinned separately to CPUs 4-7 via Windows
+# process affinity, can no longer contend with them for the same cycles.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.cpupin.yml up -d postgres redis kafka
+services:
+  postgres:
+    cpuset: "0-3"
+  redis:
+    cpuset: "0-3"
+  kafka:
+    cpuset: "0-3"

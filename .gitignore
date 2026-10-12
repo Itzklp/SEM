@@ -41,6 +41,9 @@ logs/
 npm-debug.log*
 pnpm-debug.log*
 
+# Phase 9 load-test helper (a locally-signed JWT, not a secret worth keeping)
+.loadtest-token
+
 # Python (ml/)
 __pycache__/
 *.py[cod]
