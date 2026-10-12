@@ -7,7 +7,8 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc -b",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "sign-token": "ts-node -r tsconfig-paths/register --transpile-only src/cli/sign-token.ts"
   },
   "dependencies": {
     "ioredis-mock": "^8.13.1",
@@ -16,7 +17,10 @@
   "devDependencies": {
     "@types/ioredis-mock": "^8.2.8",
     "@types/jsonwebtoken": "^9.0.7",
+    "dotenv": "^16.4.7",
     "ioredis": "^5.4.1",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.2"
   }
 }
