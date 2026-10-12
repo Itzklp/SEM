@@ -822,30 +822,41 @@ pg-errors.ts`), distinguishing "Postgres is down" from "this query has a real bu
 
 ---
 
-## Phase 9 — Performance and scalability
+## Phase 9 — Performance and scalability ✅ **COMPLETE**
 
 |                |                                                     |
 | -------------- | --------------------------------------------------- |
 | **Goal**       | **Measured** evidence for NFR-001, NFR-002, NFR-004 |
-| **Blocked by** | Phase 8                                             |
+| **Blocked by** | ~~Phase 8~~ complete                                |
 
-**Deliverables**
+**Delivered**
 
-- k6 scenarios at 500 / 1 000 / 2 000 / 5 000 / 10 000 / 20 000 TPS
-- Per run: throughput, p50/p95/p99/max, error rate, CPU, memory, Kafka lag, Redis latency
-- **Both** client-side and server-side latency series, reported separately (RISK-001 mitigation D)
-- Horizontal scaling experiment, scoped to what 4 cores can honestly support (mitigation C)
-- CPU pinning between the load generator and the system under test (mitigation B)
-- Bottleneck analysis, fixes, re-measurement
-- `docs/testing/test-results/performance-report.md`
+- `tests/load/score.k6.js` — an open-model (`ramping-arrival-rate`) k6 scenario against the real `POST /api/v1/fraud/score`, parameterised by target TPS; each simulated VU carries a distinct spoofed `X-Forwarded-For` so `RATE_LIMIT_MAX_REQUESTS`'s per-client keying is exercised the way many real merchants would, not collapsed onto this one laptop's single real source IP
+- `scripts/run-load-tests.mjs` (`pnpm test:load`) — runs the full 500→20 000 TPS matrix, measuring **both** latency series per stage: client-side from k6's own summary, server-side by diffing `fraud-api`'s own `/metrics` histogram before/after each stage (chosen over Prometheus's rate()/scrape-interval math, which at 15s is too coarse to resolve a 20-45s window) — plus `docker stats` samples and host CPU% for `fraud-api` itself
+- `packages/testkit`'s `sign-token` CLI — the one place a load-test JWT gets signed (k6's own JS runtime has no `jsonwebtoken`)
+- `docker-compose.cpupin.yml` — the CPU-pinning override (mitigation B), applied and removed again for the §4 experiment
+- `docs/testing/test-results/performance-report.md` — the full matrix, bottleneck analysis, scaling experiment and CPU-pinning experiment, every number traceable to a run under `docs/testing/test-results/perf-runs/`
 
-**Exit criteria**
+**Exit criteria — all met, including reporting the failures honestly**
 
-- Every scenario executed and recorded, **including the ones that fail**
-- Each run marked `PASS` / `DEGRADED` / `FAILED` against its NFR
-- Saturation point identified, with the bottleneck named
-- **Every claim in the report is traceable to a reproducible run.** No estimated number is presented as measured
-- The hardware caveat from DEVELOPMENT_ENVIRONMENT.md §5.2 appears in the report
+- ✅ Every scenario in the 500→20 000 TPS matrix executed and recorded, including every one that failed
+- ✅ Every stage marked against its NFR — all six **FAILED** NFR-001/002; the scaling experiment **FAILED** NFR-004 — recorded as such in `docs/requirements/traceability-matrix.md`, not softened
+- ✅ **Saturation point identified, bottleneck named**: Postgres's synchronous-commit (WAL fsync) write path under Docker Desktop's WSL2 virtualised disk, confirmed three independent ways — a pool-size fix that helped at light load and stopped helping at saturation (§2), flat-to-negative horizontal scaling (§3, exactly as `DEVELOPMENT_ENVIRONMENT.md` §5.2 predicted in advance), and CPU pinning that made no measurable difference (§4, ruling out k6-vs-`fraud-api` scheduling contention as the cause)
+- ✅ Every claim in the report traces to a reproducible run under `perf-runs/`; no estimated number presented as measured
+- ✅ The RISK-001 hardware caveat appears throughout the report, not just once at the top
+
+**One real fix shipped, one real root cause named but deliberately not "fixed":**
+
+1. **`POSTGRES_POOL_HOT_MAX` was `10` since Phase 1 — fixed to `50`.** Caught by the very first, deliberately light smoke stage (50 TPS, nowhere near saturating): requests were queueing for a connection, not executing slowly (p99 2 457ms → 49ms, confirmed by a direct before/after measurement). Shipped in `.env.example`.
+2. **Postgres's synchronous-commit write path is the real ceiling at sustained load — named, not patched.** Raising the pool further (`50`→`80`) made no improvement, ruling out "not enough connections." `synchronous_commit=off` would trade away the exact durability guarantee ADR-006 is built on — a real architectural tradeoff for a future ADR, not something to flip mid-benchmark. Recorded as this phase's headline finding for whoever picks it up next.
+
+**One real bug the load testing itself caught, unrelated to the NFR numbers:** `apps/fraud-api/src/common/load-shedding.ts`'s in-flight counter leaked one count per request whose client aborted mid-response (k6's own timeout killing the socket under saturation) — `onResponse` does not reliably fire on an aborted connection. Confirmed live: `/health` kept returning `429` for over a minute after the load generator had already exited. Fixed with a `reply.raw.on('close', ...)` fallback, and `/health`/`/metrics` were additionally exempted from the ceiling entirely so an operator can always see true state during an incident.
+
+**Deliberate deviations, recorded rather than silently taken:**
+
+1. **No second physical machine (RISK-001 mitigation A)** — not available this session. Mitigations B+C+D (pinning, capped scaling, dual latency series) were applied instead, per `DEVELOPMENT_ENVIRONMENT.md` §5.2's own recommendation.
+2. **The horizontal-scaling experiment uses k6-side round robin across ports, not a real gateway/load balancer** — Phase 3 deliberately never built one (`ARCHITECTURE.md` §14). NFR-004's throughput claim is still testable this way; "behind a load balancer" literally is not.
+3. **NFR-003 (in-service p99 < 50ms) was not re-verified at Phase 4/5's own component level** — this phase's server-side numbers are the END-TO-END request histogram under load (dominated by §2's bottleneck), a different claim from Phase 4/5's feature-fetch sub-budget measurement, which still stands on its own.
 
 ---
 
