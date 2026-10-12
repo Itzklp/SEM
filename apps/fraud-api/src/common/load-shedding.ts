@@ -22,6 +22,12 @@ import type {
  * hot-path check shouldn't pay for just to reuse a number that's trivial
  * to keep locally instead.
  */
+// Exempt from the ceiling: an operator diagnosing an incident (which is
+// exactly when this ceiling is most likely to be engaged) must always be
+// able to reach `/health` and `/metrics`, and Prometheus's own scrape must
+// never itself become a casualty of the thing it exists to detect.
+const EXEMPT_ROUTES = new Set(['/metrics', '/api/v1/health']);
+
 export function registerLoadShedding(
   fastify: FastifyInstance,
   maxConcurrentRequests: number,
@@ -29,9 +35,36 @@ export function registerLoadShedding(
   let active = 0;
   const counted = new WeakSet<FastifyRequest>();
 
+  function release(request: FastifyRequest): void {
+    if (counted.has(request)) {
+      active -= 1;
+      counted.delete(request);
+    }
+  }
+
   fastify.addHook(
     'onRequest',
     (request: FastifyRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => {
+      if (EXEMPT_ROUTES.has(request.url.split('?')[0] ?? request.url)) {
+        done();
+        return;
+      }
+      // CAUGHT LIVE, Phase 9: a client that aborts mid-response (k6's own
+      // request timeout killing the socket under heavy load, or any real
+      // client doing the same) does not reliably fire Fastify's
+      // `onResponse` hook — the request lifecycle never reaches "sent".
+      // Without this fallback, every aborted request leaks one count
+      // permanently, and `active` ratchets up until the ceiling is
+      // engaged forever, long after real traffic has stopped (confirmed:
+      // `/health` kept returning 429 for over a minute after the load
+      // generator had already exited). `reply.raw`'s own 'close' event
+      // fires in every case `onResponse` does NOT catch — guarded by the
+      // same `counted` WeakSet so a request that completes normally is
+      // never double-released.
+      reply.raw.on('close', () => {
+        release(request);
+      });
+
       if (active >= maxConcurrentRequests) {
         // Sending the reply directly from the hook, without calling
         // `done()`, is how Fastify short-circuits the request — no
@@ -58,14 +91,11 @@ export function registerLoadShedding(
   fastify.addHook(
     'onResponse',
     (request: FastifyRequest, _reply: FastifyReply, done: HookHandlerDoneFunction) => {
-      // Symmetric with `registerHttpMetrics`'s own guard: `onResponse`
-      // fires even for a request THIS module itself shed (never
-      // incremented) — decrementing unconditionally would drift `active`
-      // negative, which would eventually shed nothing at all.
-      if (counted.has(request)) {
-        active -= 1;
-        counted.delete(request);
-      }
+      // The common case — a response that completed normally. `release`
+      // itself is guarded (via `counted`) against the request having
+      // already been released by the `'close'` fallback above, and
+      // against a request this module shed and never counted at all.
+      release(request);
       done();
     },
   );
