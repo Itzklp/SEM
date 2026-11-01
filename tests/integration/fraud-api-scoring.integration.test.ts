@@ -1,3 +1,4 @@
+import rateLimit from '@fastify/rate-limit';
 import { loadConfig } from '@fraudguard/config';
 import { scoreResponseSchema } from '@fraudguard/contracts';
 import { closePersistenceContext, type PersistenceContext } from '@fraudguard/persistence';
@@ -35,6 +36,18 @@ describe('fraud-api: POST /api/v1/fraud/score (integration)', () => {
     // Caught live: every 4xx assertion below failed with "Cannot read
     // properties of undefined (reading 'code')" until this was added.
     app.useGlobalFilters(new HttpExceptionFilter(pino({ level: 'silent' })));
+    // @fastify/rate-limit is ALSO only ever registered inside main.ts's
+    // bootstrap() — CAUGHT doing Phase 11's security review, the same gap
+    // class Phase 7/8/9 already found for tracing, HTTP metrics, and load
+    // shedding: a testing module built this way bypasses bootstrap()
+    // entirely, so the real rate limiter was never active here, and
+    // ST-RATE-001 (threat-model.md §6) measured zero 429s regardless of
+    // how many requests it fired until this was added.
+    const rateLimitConfig = loadConfig().security.rateLimit;
+    await app.register(rateLimit, {
+      max: rateLimitConfig.maxRequests,
+      timeWindow: rateLimitConfig.windowMs,
+    });
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
 
@@ -171,11 +184,61 @@ describe('fraud-api: POST /api/v1/fraud/score (integration)', () => {
     );
   });
 
-  // IT-IDEM-001. What: replaying the same transactionId returns the ORIGINAL decision.
-  // Why: FR-017 — this is the Redis fast path specifically (RT-DUP-001's
-  //      DB-backstop variant needs Redis stopped, which is a Phase 8
-  //      resilience scenario, not this test).
-  it('returns the original decision for a duplicate transactionId (FR-017)', async () => {
+  // ST-003 (threat-model.md §6: "Authentication rejects ... expired ...
+  // tokens"). CAUGHT, doing Phase 11's security review: this exact case —
+  // a token that is otherwise perfectly valid except its `exp` claim is in
+  // the past — had no test anywhere in the suite, despite jwt-auth.guard.ts's
+  // own doc comment naming ST-001..004 as what it exists to satisfy.
+  it('rejects an expired token with 401 (ST-003)', async () => {
+    const config = loadConfig();
+    const expiredToken = signTestToken({
+      secret: config.security.jwt.secret,
+      issuer: config.security.jwt.issuer,
+      audience: config.security.jwt.audience,
+      privileges: ['score'],
+      expiresInSeconds: -1, // already expired the instant it's signed
+    });
+    const txn = generateTransaction({ seed: 3008 }, 0);
+    const response = await inject(txn, expiredToken);
+    expect(response.statusCode).toBe(401);
+    // Deliberately the SAME code as a malformed token (jwt-auth.guard.ts's
+    // own comment: one generic failure message for every verification
+    // failure mode, so the response itself is never a probing oracle for
+    // which specific thing was wrong with the token).
+    expect((response.json() as { error: { code: string } }).error.code).toBe('AUTH_INVALID_TOKEN');
+  });
+
+  // ST-004 (threat-model.md §6: "... and forged tokens"). What: a token
+  // signed with the WRONG secret but otherwise well-formed (correct
+  // issuer/audience/claims shape) — the actual "attacker without the
+  // secret" scenario, distinct from ST-001's "not-a-JWT-at-all" malformed
+  // case. Same gap as ST-003: found with no existing coverage.
+  it('rejects a token signed with the wrong secret with 401 (ST-004)', async () => {
+    const config = loadConfig();
+    const forgedToken = signTestToken({
+      secret: 'attacker-does-not-know-the-real-secret',
+      issuer: config.security.jwt.issuer,
+      audience: config.security.jwt.audience,
+      privileges: ['score'],
+    });
+    const txn = generateTransaction({ seed: 3009 }, 0);
+    const response = await inject(txn, forgedToken);
+    expect(response.statusCode).toBe(401);
+    expect((response.json() as { error: { code: string } }).error.code).toBe('AUTH_INVALID_TOKEN');
+  });
+
+  // IT-IDEM-001 / ST-REPLAY-001 (threat-model.md §6: "Replayed
+  // transactionId returns the original decision, no duplicate side
+  // effects"). What: both halves of that claim, for the SAME replay
+  // vector (resubmitting the identical transactionId via the API) —
+  // found during Phase 11's security review that the "no duplicate side
+  // effects" half was never actually checked here; only
+  // event-worker.integration.test.ts's IT-EVT-002 checked that half, for a
+  // DIFFERENT replay vector (duplicate Kafka delivery to a consumer, not
+  // API resubmission). Why: FR-017 — this is the Redis fast path
+  // specifically (RT-DUP-001's DB-backstop variant needs Redis stopped,
+  // which is a Phase 8 resilience scenario, not this test).
+  it('returns the original decision for a duplicate transactionId, with no duplicate rows (FR-017, ST-REPLAY-001)', async () => {
     const txn = generateTransaction({ seed: 3006 }, 0);
 
     const first = await inject(txn, scoreToken);
@@ -184,6 +247,21 @@ describe('fraud-api: POST /api/v1/fraud/score (integration)', () => {
     expect(first.statusCode).toBe(200);
     expect(second.statusCode).toBe(200);
     expect(second.json()).toEqual(first.json());
+
+    // coldPool, not hotPool, for this assertion query — hotPool's
+    // statement_timeout is ADR-003's 100ms hot-path write budget, which a
+    // test-side verification SELECT has no business being held to (the
+    // same fix Phase 8/9 already applied in their own test cleanup code).
+    const decisionRows = await persistence.coldPool.query(
+      'SELECT 1 FROM decisions WHERE transaction_id = $1',
+      [txn.transactionId],
+    );
+    expect(decisionRows.rowCount).toBe(1);
+    const outboxRows = await persistence.coldPool.query(
+      'SELECT 1 FROM outbox_events WHERE aggregate_id = $1',
+      [txn.transactionId],
+    );
+    expect(outboxRows.rowCount).toBe(2); // transaction.received + transaction.decided — not 4
   });
 
   // RT-005 (Phase 4 exit criterion: "Missing Redis returns declared
@@ -210,7 +288,16 @@ describe('fraud-api: POST /api/v1/fraud/score (integration)', () => {
         expect(parsed.data.degradedReason).toBe('FEATURES_UNAVAILABLE');
       }
     } finally {
-      redis.connect();
+      // CAUGHT LIVE, Phase 11: ioredis's own default retryStrategy
+      // reconnects automatically after `disconnect()` — calling
+      // `.connect()` unconditionally can race it and throw "Redis is
+      // already connecting/connected" (the exact gotcha
+      // redis-outage.resilience.test.ts's own doc comment already
+      // documents; this test predates that one and hadn't adopted the
+      // same guard). Only connect explicitly if it isn't already on its way.
+      if (redis.status === 'end' || redis.status === 'close') {
+        redis.connect();
+      }
       if (redis.status !== 'ready') {
         await new Promise((resolve) => redis.once('ready', resolve));
       }
@@ -227,5 +314,40 @@ describe('fraud-api: POST /api/v1/fraud/score (integration)', () => {
     expect(body.status).toBe('healthy');
     expect(body.dependencies.postgres?.status).toBe('up');
     expect(body.dependencies.redis?.status).toBe('up');
+  });
+
+  // ST-RATE-001 (threat-model.md §6: "Rate limiting triggers and returns
+  // 429"). What: THIS specific mechanism — @fastify/rate-limit
+  // (registered in main.ts, keyed per-client by request.ip, a token
+  // bucket over RATE_LIMIT_WINDOW_MS) — actually firing. Found during
+  // Phase 11's security review: the only existing 429 test
+  // (overload-shedding.resilience.test.ts) explicitly documents that it
+  // exercises a DIFFERENT mechanism (MAX_CONCURRENT_REQUESTS, a
+  // concurrency ceiling) and is not a substitute; NFR-009 is still marked
+  // PLANNED in the traceability matrix for exactly this reason. Every
+  // `.inject()` call in this file shares the same simulated client
+  // identity, which is what makes firing more than
+  // RATE_LIMIT_MAX_REQUESTS in one RATE_LIMIT_WINDOW_MS here the correct
+  // way to trigger it for real.
+  //
+  // Deliberately the LAST test in this file, not just the last one
+  // written: every test in this describe block shares one app instance,
+  // so one shared rate-limit bucket — CAUGHT LIVE, this test originally
+  // sat mid-file and correctly tripped the limiter, then every test AFTER
+  // it in the same run started failing too, still rate-limited from this
+  // one's own 429s. Ordering, not a second bug.
+  it('rate-limits a single client exceeding RATE_LIMIT_MAX_REQUESTS within one window (ST-RATE-001)', async () => {
+    const config = loadConfig();
+    const requestCount = config.security.rateLimit.maxRequests + 5;
+    const responses = await Promise.all(
+      Array.from({ length: requestCount }, (_, i) =>
+        inject(generateTransaction({ seed: 3900 }, i), scoreToken),
+      ),
+    );
+    const rateLimited = responses.filter((r) => r.statusCode === 429);
+    expect(rateLimited.length).toBeGreaterThan(0);
+    for (const response of rateLimited) {
+      expect(response.headers['retry-after']).toBeDefined();
+    }
   });
 });
