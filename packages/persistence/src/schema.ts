@@ -134,5 +134,18 @@ export const auditEvents = pgTable('audit_events', {
   occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
 });
 
+/** Cold-path, analyst-reviewed examples for opt-in synthetic-only retraining. */
+export const modelTrainingExamples = pgTable('model_training_examples', {
+  transactionId: text('transaction_id').primaryKey(),
+  features: jsonb('features').$type<Record<string, number> | null>(),
+  amountMajorUnits: real('amount_major_units'),
+  predictedDecision: text('predicted_decision'),
+  modelVersion: text('model_version'),
+  label: boolean('label'),
+  labelSource: text('label_source'),
+  labeledAt: timestamp('labeled_at', { withTimezone: true }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type AuditEventRow = typeof auditEvents.$inferSelect;
 export type NewAuditEventRow = typeof auditEvents.$inferInsert;

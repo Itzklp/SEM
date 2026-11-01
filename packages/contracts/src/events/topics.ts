@@ -25,6 +25,7 @@ export const TOPIC_FOR_EVENT_TYPE = {
   'transaction.decided': 'transaction.decided',
   'fraud.case.created': 'review.created',
   'fraud.case.reviewed': 'review.completed',
+  'model.updated': 'model.updated',
 } as const;
 
 export type KnownEventType = keyof typeof TOPIC_FOR_EVENT_TYPE;

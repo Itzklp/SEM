@@ -56,6 +56,13 @@ export const transactionDecidedEvent = defineEvent(
     scoringProvider: z.enum(SCORING_PROVIDERS),
     degraded: z.boolean(),
     degradedReason: z.enum(DEGRADED_REASONS),
+    /** Minimal model inputs only; excludes transaction/customer identifiers. */
+    trainingFeatures: z
+      .object({
+        amountMajorUnits: z.number().nonnegative(),
+        features: z.record(z.string(), z.number().nonnegative()),
+      })
+      .optional(),
   }),
 );
 export type TransactionDecidedEvent = z.infer<typeof transactionDecidedEvent>;

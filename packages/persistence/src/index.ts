@@ -5,3 +5,5 @@ export * from './repositories/transaction-repository';
 export * from './repositories/outbox-repository';
 export * from './repositories/case-repository';
 export * from './repositories/audit-repository';
+export * from './repositories/model-training-repository';
+export * from './repositories/model-registry-repository';
