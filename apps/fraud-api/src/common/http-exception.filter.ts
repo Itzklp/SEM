@@ -59,6 +59,34 @@ export class HttpExceptionFilter implements ExceptionFilter {
       return;
     }
 
+    // CAUGHT LIVE, Phase 11's security review (ST-RATE-001):
+    // `@fastify/rate-limit` signals "over the limit" with a plain `Error`
+    // carrying a `.statusCode = 429` — a Fastify-level convention, not a
+    // NestJS `HttpException` — so it fell straight into the generic branch
+    // below and every rate-limited client saw a `500 INTERNAL_ERROR`
+    // instead of `429` with `Retry-After`. Verified against the real
+    // running process: firing 150 real concurrent requests measured
+    // `X-RateLimit-Remaining` correctly counting down to `0`, but the
+    // response for every request past the limit was `500`, not `429` —
+    // the limiter was genuinely engaging, the client just could never
+    // tell. Any Fastify-level error exposing a numeric `.statusCode` is
+    // handled the same honest way an `HttpException` is, rather than
+    // being swallowed into the single "something unexpected happened"
+    // path meant for errors with no declared status at all.
+    if (
+      exception instanceof Error &&
+      'statusCode' in exception &&
+      typeof exception.statusCode === 'number' &&
+      exception.statusCode >= 400 &&
+      exception.statusCode < 600
+    ) {
+      const status = exception.statusCode;
+      void response.status(status).send({
+        error: { code: HttpStatus[status] ?? 'ERROR', message: exception.message, requestId },
+      });
+      return;
+    }
+
     // Unhandled — logged with full detail, never surfaced to the client.
     this.logger.error({ err: exception, requestId }, 'Unhandled exception');
     void response.status(HttpStatus.INTERNAL_SERVER_ERROR).send({

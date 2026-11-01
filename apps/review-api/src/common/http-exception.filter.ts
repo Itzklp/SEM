@@ -41,6 +41,30 @@ export class HttpExceptionFilter implements ExceptionFilter {
       return;
     }
 
+    // Kept in sync with fraud-api's copy — see this file's own doc
+    // comment on why duplicated, not shared. fraud-api's Phase 11
+    // security review found a Fastify-level error (anything with a
+    // `.statusCode`, e.g. `@fastify/rate-limit`'s own thrown `Error`)
+    // falling into the generic branch below and surfacing as a `500`
+    // instead of its real status. review-api does not register
+    // `@fastify/rate-limit` today, but this filter is `@Catch()`-all —
+    // any future Fastify-level error (a malformed body Fastify itself
+    // rejects before Nest's pipes run, for one) deserves the same honest
+    // handling, not a silent 500.
+    if (
+      exception instanceof Error &&
+      'statusCode' in exception &&
+      typeof exception.statusCode === 'number' &&
+      exception.statusCode >= 400 &&
+      exception.statusCode < 600
+    ) {
+      const status = exception.statusCode;
+      void response.status(status).send({
+        error: { code: HttpStatus[status] ?? 'ERROR', message: exception.message, requestId },
+      });
+      return;
+    }
+
     this.logger.error({ err: exception, requestId }, 'Unhandled exception');
     void response.status(HttpStatus.INTERNAL_SERVER_ERROR).send({
       error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred', requestId },
