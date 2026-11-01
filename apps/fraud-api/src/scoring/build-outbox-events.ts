@@ -4,7 +4,7 @@ import {
   transactionDecidedEvent,
   transactionReceivedEvent,
 } from '@fraudguard/contracts';
-import type { FraudDecision, Transaction } from '@fraudguard/domain';
+import type { FraudDecision, FeatureVector, Transaction } from '@fraudguard/domain';
 import { captureTraceparent, currentTraceId } from '@fraudguard/observability';
 import type { OutboxEventInput } from '@fraudguard/persistence';
 
@@ -35,6 +35,7 @@ import type { OutboxEventInput } from '@fraudguard/persistence';
 export function buildOutboxEvents(
   transaction: Transaction,
   decision: FraudDecision,
+  features?: FeatureVector,
 ): OutboxEventInput[] {
   const traceId = currentTraceId() ?? transaction.transactionId;
   const traceContext = captureTraceparent();
@@ -77,6 +78,14 @@ export function buildOutboxEvents(
       scoringProvider: decision.scoringProvider,
       degraded: decision.degraded,
       degradedReason: decision.degradedReason,
+      ...(features
+        ? {
+            trainingFeatures: {
+              amountMajorUnits: transaction.amount.toMajorUnits(),
+              features: features.features,
+            },
+          }
+        : {}),
     },
   });
 

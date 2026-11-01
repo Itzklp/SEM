@@ -93,9 +93,8 @@ export const rawEnvSchema = z.object({
   // gate). 'stub' remains available and meaningful on its own — a
   // genuinely simpler deterministic baseline, not a discarded Phase 3
   // leftover — but it is no longer the intended default now that a
-  // complete scorer exists. 'ml' is not yet implemented (Phase 10) and
-  // will fail at provider construction if selected — see
-  // scoring-provider.factory.ts in apps/fraud-api.
+  // complete scorer exists. 'ml' uses the HTTP provider with timeout,
+  // circuit breaker and configured fallback in fraud-api.
   SCORING_PROVIDER: z.enum(['stub', 'rules', 'ml']).default('rules'),
   ML_SERVICE_URL: z.string().url().default('http://localhost:8000'),
   ML_TIMEOUT_MS: z.coerce.number().int().positive().default(30),

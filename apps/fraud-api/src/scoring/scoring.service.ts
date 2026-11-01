@@ -70,7 +70,7 @@ export class ScoringService {
     @Inject(POLICY_STORE) private readonly policyStore: PolicyStore,
     @Inject(LOGGER) private readonly logger: Logger,
   ) {
-    this.scoringProvider = createScoringProvider(config);
+    this.scoringProvider = createScoringProvider(config, this.logger);
   }
 
   async score(request: ScoreRequest): Promise<ScoreResponse> {
@@ -131,14 +131,17 @@ export class ScoringService {
       () => this.tryGetFeatureVector(transaction),
     );
     status = transitionTransaction(status, 'FEATURES_LOADED');
-    const degraded = features.source !== 'live';
-    const degradedReason: DegradedReason = degraded ? 'FEATURES_UNAVAILABLE' : 'NONE';
+    const featuresUnavailable = features.source !== 'live';
 
     // --- FEATURES_LOADED -> SCORED ------------------------------------------
     const scoringResult = await measure(
       { span: 'score.score', histogram: fraudScoreDurationSeconds, labels: { stage: 'score' } },
       () => this.scoringProvider.score({ transaction, features }),
     );
+    const degraded = featuresUnavailable || scoringResult.degradedReason !== undefined;
+    const degradedReason: DegradedReason = featuresUnavailable
+      ? 'FEATURES_UNAVAILABLE'
+      : (scoringResult.degradedReason ?? 'NONE');
     status = transitionTransaction(status, 'SCORED');
 
     // --- SCORED -> DECIDED ---------------------------------------------------
@@ -191,7 +194,7 @@ export class ScoringService {
     // picks these up after the response has already been returned;
     // nothing here talks to Kafka (ADR-001 — enforced by the hot-path
     // architecture test's import scan).
-    const outboxEventInputs = buildOutboxEvents(decidedTransaction, fraudDecision);
+    const outboxEventInputs = buildOutboxEvents(decidedTransaction, fraudDecision, features);
     const persisted = await this.persistOrFailClosed(
       decidedTransaction,
       fraudDecision,

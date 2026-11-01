@@ -36,6 +36,8 @@
     "db:migrate": "pnpm --filter @fraudguard/persistence migrate",
     "db:rollback": "pnpm --filter @fraudguard/persistence rollback",
     "db:generate": "pnpm --filter @fraudguard/persistence generate",
+    "ml:train": "python apps/ml-service/app/train.py",
+    "ml:serve": "python -m uvicorn app.main:app --app-dir apps/ml-service --host 0.0.0.0 --port 8000",
     "seed": "pnpm --filter @fraudguard/testkit seed",
     "audit:env": "powershell -ExecutionPolicy Bypass -File scripts/audit-environment.ps1",
     "prepare": "husky"

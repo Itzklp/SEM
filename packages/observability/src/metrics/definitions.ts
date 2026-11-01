@@ -7,10 +7,8 @@ import { registry } from './registry';
  * list, defined exactly once here so every app (`fraud-api`, `review-api`,
  * `event-worker`) observes the SAME metric object shape — a histogram
  * redefined per app with different buckets would make cross-service
- * dashboard panels meaningless. `ml_duration_seconds` is defined now,
- * honestly unused until Phase 10 (`MLScoringProvider` does not exist yet,
- * RISK-003) — it appears on `/metrics` with zero observations, which is
- * the correct, visible state for "not wired yet", not a missing metric.
+ * dashboard panels meaningless. `ml_duration_seconds` is observed by the
+ * fraud-api ML provider for successful calls and failures.
  */
 
 /** Inbound transactions received by `fraud-api`'s `/fraud/score`. `replay` distinguishes a fresh transactionId from an idempotent replay — not asked for by the roadmap's one-line description, but free and load-bearing for "how many of these are actually new work". */
@@ -89,10 +87,10 @@ export const dbDurationSeconds = new Histogram({
   registers: [registry],
 });
 
-/** Not observed anywhere until Phase 10 — see this file's doc comment. `provider` will distinguish the real ML inference call from any future fallback path. */
+/** ML service call duration, labelled by the configured provider. */
 export const mlDurationSeconds = new Histogram({
   name: 'ml_duration_seconds',
-  help: 'ML provider inference duration in seconds, labelled by provider. Unused until Phase 10 (RISK-003) — defined now so the metric contract does not change when MLScoringProvider lands.',
+  help: 'ML provider inference duration in seconds, labelled by provider.',
   labelNames: ['provider'] as const,
   buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25],
   registers: [registry],

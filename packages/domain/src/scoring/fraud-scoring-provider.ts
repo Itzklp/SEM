@@ -54,4 +54,6 @@ export interface ScoringResult {
   readonly provider: ScoringProviderName;
   /** e.g. "model-v0-stub", "model-v1-rules", "model-v3-xgboost" (Phase 10). Recorded on every FraudDecision — FR-012. */
   readonly modelVersion: string;
+  /** Set when this provider had to use its configured safe fallback. */
+  readonly degradedReason?: 'ML_UNAVAILABLE';
 }
