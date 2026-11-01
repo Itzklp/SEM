@@ -860,36 +860,125 @@ pg-errors.ts`), distinguishing "Postgres is down" from "this query has a real bu
 
 ---
 
-## Phase 10 — Machine learning
+## Phase 10 — Machine learning ✅ **COMPLETE**
 
 |                  |                                                                                             |
 | ---------------- | ------------------------------------------------------------------------------------------- |
 | **Goal**         | Add a learned scorer as a _configuration change_, and measure whether it is actually better |
-| **Blocked by**   | Phase 9 — **do not start earlier**                                                          |
+| **Blocked by**   | ~~Phase 9~~ complete                                                                        |
 | **Requirements** | FR-004 (ML), FR-012                                                                         |
 
-**Deliverables**
+**Delivered**
 
-1. Dataset definition (synthetic / publicly appropriate; **never real customer data**)
-2. Exploration and cleaning
-3. Feature engineering aligned to the _serving_ features, to avoid training/serving skew
-4. Baseline: logistic regression
-5. Comparison: random forest, XGBoost / LightGBM
-6. Evaluation on **Precision, Recall, F1, ROC-AUC, PR-AUC, FPR, FNR and inference latency** — accuracy alone is meaningless on data this imbalanced
-7. Model selection with the reasoning recorded
-8. Serialisation and a versioned model registry
-9. `apps/ml-service` inference API
-10. `MLScoringProvider` behind timeout + circuit breaker, falling back to rules
-11. Load test with ML enabled
-12. **Controlled comparison: ML versus stub/rule baseline**, through the identical pipeline
+- `apps/ml-service` — a deterministic synthetic data generator (six attack
+  scenarios overlapping the serving rule features, so the experiment measures
+  generalisation, not a fitted shortcut), a logistic-regression /
+  random-forest / histogram-gradient-boosting comparison on fraud-relevant
+  metrics, a versioned model artifact registry (`ml/models/registry.json`,
+  gitignored — a regenerated build output, not source), and a FastAPI
+  inference API (`/api/v1/score`, `/health/live`, `/health/ready`,
+  `/metrics`) that rejects unknown feature names and out-of-range scores
+- `apps/fraud-api/src/scoring/ml-scoring.provider.ts` — `MLScoringProvider`:
+  timeout (`ML_TIMEOUT_MS`) + a real closed/open/half-open circuit breaker,
+  falling back to the configured deterministic provider
+  (`ML_FALLBACK_PROVIDER`) with `degradedReason: 'ML_UNAVAILABLE'` recorded on
+  the decision — never a 5xx
+- `review-api`'s model registry (`GET /api/v1/models`, authenticated;
+  `POST /api/v1/models`, `admin`-only) — registration and the `model.updated`
+  outbox event are written in one transaction (`ModelRegistryRepository`),
+  audited by `event-worker` like every other domain event
+- `apps/event-worker/src/consumers/training-example-consumer.ts` — a fourth,
+  independent consumer group joining `transaction.decided`'s minimised
+  scoring features (amount + the 11 serving features only — no user, device,
+  merchant or IP identifiers) with `review.completed`'s analyst outcome by
+  `transaction_id`, regardless of which arrives first. `APPROVE`→label `0`,
+  `BLOCK`→label `1`; `ESCALATE` stays unlabeled, since it is not a fraud
+  determination. Migration `0004_model_training_examples.sql`
+  (`model_training_examples`, `model_versions`)
+- `docs/testing/test-results/phase10-ml-evaluation.md` — the full evaluation:
+  model comparison, controlled rules-vs-ML pipeline comparison, the real HTTP
+  load comparison, circuit-breaker verification, and every bug this phase
+  found
+- `tests/resilience/ml-outage.resilience.test.ts` (**RT-ML-001**) — the row
+  Phase 8 explicitly deferred ("no `MLScoringProvider` yet"), built now:
+  spawns and kills a real `uvicorn` process, verifies the full
+  closed→open→half-open→closed lifecycle against it
 
-**Exit criteria**
+**Exit criteria — all met, verified against the real stack**
 
-- Decision engine, API contract and audit schema **unchanged** — the abstraction held
-- Every decision records its model version
-- ML failure falls back to rules, verified under load
-- Comparison reports both detection quality **and** latency cost
-- If ML does not beat the rule baseline on the fraud-relevant metrics, **that result is reported as found**
+- ✅ **Decision engine, API contract and audit schema unchanged** — `ml` is
+  just another `FraudScoringProvider`; `ScoringResult`'s only addition
+  (`degradedReason?: 'ML_UNAVAILABLE'`) is additive and optional
+- ✅ **Every decision records its model version** — `model-v1-synthetic-<algorithm>-<hash>` for ML, `model-v1-rules` on fallback, carried through to
+  `transaction.decided` and the audit trail unchanged
+- ✅ **ML failure falls back to rules, verified under load** — RT-ML-001
+  (automated, real process) plus the 100 TPS HTTP comparison below, where
+  every request still returned a valid `200` decision despite 365 fallbacks
+- ✅ **Comparison reports both detection quality and latency cost** —
+  `phase10-ml-evaluation.md`'s controlled pipeline comparison (PR-AUC 0.8150
+  ML vs. 0.4603 rules) and the real HTTP comparison (~17-22 ms added p99 at a
+  sustainable 20 TPS)
+- ✅ **The result is reported as found, not adjusted to look better**: on
+  these synthetic scenarios ML wins on detection quality at a real, non-trivial
+  latency and operational cost (a second process, a network hop, a
+  tighter failure budget) — reported plainly in both directions
+
+**Real bugs this phase found — by actually bringing the full stack up and
+exercising it, not by inspection:**
+
+1. **`review-api`'s `GET /api/v1/models` 500'd on every call once a model was
+   actually registered.** A raw `db.execute(sql...)` returns Postgres's
+   `timestamptz` as plain text, never a parsed `Date` — the controller's
+   `instanceof Date` branch never once fired, and the raw text format fails
+   strict ISO-8601 validation. Fixed by unconditionally re-parsing through
+   `new Date(...).toISOString()`. Full writeup: `phase10-ml-evaluation.md`.
+2. **The same controller's admin check was a manual inline conditional**,
+   inconsistent with this codebase's established `@RequirePrivileges` +
+   `PrivilegesGuard` decorator pattern used identically everywhere else.
+   Fixed to match — not a live vulnerability, but a real inconsistency.
+3. **RT-ML-001 itself, writing it**: a static top-level `import { AppModule }`
+   is hoisted ahead of the test's own `beforeAll`, so `fraud-api`'s
+   `configProvider` (`useValue: loadConfig()`, read once by design) captured
+   `process.env` _before_ the test's env overrides ran — every assertion
+   silently scored against this machine's real `.env`-configured
+   `ml-service`, not the test's own disposable instance. Fixed by
+   `require()`-ing `AppModule` inside `beforeAll`, after the overrides.
+4. **Model selection is itself sensitive to host load, not just serving
+   latency.** Re-running the identical, deterministic training command
+   (`--rows 100000 --seed 20261031`) on a differently-loaded host measured
+   the random forest's own single-row p99 at 62.6 ms (vs. 9.59 ms
+   originally) — enough to flip which candidate the 15 ms budget selects.
+   RISK-001's already-documented class, now confirmed inside training
+   selection too, not only inside serving. Not "fixed" (there is nothing to
+   fix — the selection logic behaved correctly both times); recorded as a
+   methodology caveat in `phase10-ml-evaluation.md`.
+5. **A cold first connection between `fraud-api` and a freshly started
+   `ml-service` reliably misses the 30 ms `ML_TIMEOUT_MS` budget**, separate
+   from any load — ADR-005's cautious design correctly falling back, but
+   worth knowing is not a load-related degradation. Documented, and handled
+   with a deliberate warm-up request in RT-ML-001 rather than loosening the
+   real budget.
+
+**Deliberate deviations, recorded rather than silently taken:**
+
+1. **No XGBoost/LightGBM** — scikit-learn's `HistGradientBoostingClassifier`
+   covers the "gradient boosting" comparison point without adding a second ML
+   framework dependency to a prototype; the roadmap's own wording ("random
+   forest, XGBoost / LightGBM") treats these as interchangeable boosting
+   options, not a fixed list.
+2. **The HTTP load comparison stops at 100 TPS, not the full Phase 9 matrix.**
+   Phase 9 already established and explained this laptop's write-path
+   saturation point; re-deriving it here would be redundant. The comparison
+   is scoped to what actually isolates ML's incremental cost: one clean,
+   sustainable-rate point (20 TPS) and one past-saturation point (100 TPS)
+   showing the compounding effect, plus an honest note on the confounded
+   300 TPS attempt rather than silently dropping it.
+3. **Registry publication from the trainer requires both
+   `ML_REGISTRY_URL` and `ML_REGISTRY_TOKEN`** to be set; otherwise the
+   trainer only writes the local artifact registry. Verified manually in this
+   session (`POST`/`GET /api/v1/models`), not wired into `pnpm ml:train`'s
+   own default invocation, since most local training runs have no running
+   `review-api` to publish to.
 
 ---
 
