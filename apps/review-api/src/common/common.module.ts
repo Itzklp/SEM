@@ -7,11 +7,19 @@ import {
   CASE_REPOSITORY,
   PERSISTENCE_CONTEXT,
   TRANSACTION_REPOSITORY,
+  MODEL_REGISTRY_REPOSITORY,
 } from './persistence.provider';
 
 @Global()
 @Module({
   providers: [configProvider, loggerProvider, ...persistenceProviders],
-  exports: [APP_CONFIG, LOGGER, PERSISTENCE_CONTEXT, CASE_REPOSITORY, TRANSACTION_REPOSITORY],
+  exports: [
+    APP_CONFIG,
+    LOGGER,
+    PERSISTENCE_CONTEXT,
+    CASE_REPOSITORY,
+    TRANSACTION_REPOSITORY,
+    MODEL_REGISTRY_REPOSITORY,
+  ],
 })
 export class CommonModule {}
