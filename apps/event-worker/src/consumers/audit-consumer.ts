@@ -1,6 +1,7 @@
 import {
   caseCreatedEvent,
   caseReviewedEvent,
+  modelUpdatedEvent,
   transactionDecidedEvent,
   transactionReceivedEvent,
 } from '@fraudguard/contracts';
@@ -71,6 +72,19 @@ export async function handleAuditableEvent(
         aggregateId: event.payload.caseId,
         action: 'case.reviewed',
         actorId: event.payload.reviewerId,
+        detail: event.payload,
+        occurredAt: new Date(event.occurredAt),
+      });
+      return;
+    }
+    case 'model.updated': {
+      const event = modelUpdatedEvent.parse(payload);
+      await auditRepository.append({
+        eventId: event.eventId,
+        aggregateType: 'model',
+        aggregateId: event.payload.modelVersion,
+        action: 'model.updated',
+        actorId: null,
         detail: event.payload,
         occurredAt: new Date(event.occurredAt),
       });

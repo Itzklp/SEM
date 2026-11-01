@@ -14,6 +14,7 @@ import {
 } from '@fraudguard/observability';
 import {
   AuditRepository,
+  ModelTrainingRepository,
   CaseRepository,
   closePersistenceContext,
   createPersistenceContext,
@@ -25,6 +26,7 @@ import { startMetricsServer } from './common/metrics-server';
 import { handleAuditableEvent } from './consumers/audit-consumer';
 import { handleTransactionDecidedForCaseCreation } from './consumers/case-creation-consumer';
 import { handleTransactionDecided } from './consumers/feature-update-consumer';
+import { handleTrainingExample } from './consumers/training-example-consumer';
 import { startKafkaLagPoller } from './metrics/kafka-lag-poller';
 import { startOutboxGaugePoller } from './metrics/outbox-gauge-poller';
 import { startOutboxRelay } from './relay/outbox-relay';
@@ -33,8 +35,8 @@ import { startOutboxRelay } from './relay/outbox-relay';
 const LAG_POLL_INTERVAL_MS = 15_000;
 
 /**
- * The cold path (ADR-001): the outbox relay plus three independent Kafka
- * consumer groups (feature-update, case-creation, audit) — each its own
+ * The cold path (ADR-001): the outbox relay plus four independent Kafka
+ * consumer groups (feature-update, case-creation, audit, training-examples) — each its own
  * consumer group (kafka-topics.md: "so one slow or failed consumer never
  * blocks another from processing the same topic"), all in one process
  * for this prototype's scale (ARCHITECTURE.md §12 question 1, resolved
@@ -72,6 +74,7 @@ async function main(): Promise<void> {
   const outboxRepository = new OutboxRepository(persistence.coldDb);
   const caseRepository = new CaseRepository(persistence.coldDb);
   const auditRepository = new AuditRepository(persistence.coldDb);
+  const trainingRepository = new ModelTrainingRepository(persistence.coldDb);
 
   const relay = startOutboxRelay({
     outboxRepository,
@@ -89,14 +92,16 @@ async function main(): Promise<void> {
   const featureUpdateGroup = `${config.kafka.consumerGroup}.feature-update`;
   const caseCreationGroup = `${config.kafka.consumerGroup}.case-creation`;
   const auditGroup = `${config.kafka.consumerGroup}.audit`;
+  const trainingGroup = `${config.kafka.consumerGroup}.training-examples`;
 
   const featureUpdateConsumer = createConsumer(kafka, featureUpdateGroup);
   const caseCreationConsumer = createConsumer(kafka, caseCreationGroup);
   const auditConsumer = createConsumer(kafka, auditGroup);
+  const trainingConsumer = createConsumer(kafka, trainingGroup);
 
   const lagPoller = startKafkaLagPoller({
     admin,
-    groupIds: [featureUpdateGroup, caseCreationGroup, auditGroup],
+    groupIds: [featureUpdateGroup, caseCreationGroup, auditGroup, trainingGroup],
     intervalMs: LAG_POLL_INTERVAL_MS,
     logger,
   });
@@ -105,6 +110,7 @@ async function main(): Promise<void> {
     featureUpdateConsumer.connect(),
     caseCreationConsumer.connect(),
     auditConsumer.connect(),
+    trainingConsumer.connect(),
   ]);
 
   await Promise.all([
@@ -129,6 +135,19 @@ async function main(): Promise<void> {
         ),
     }),
     consumeWithDlq({
+      consumer: trainingConsumer,
+      producer,
+      topics: ['transaction.decided', 'review.completed'],
+      maxAttempts: 3,
+      logger,
+      handler: (payload, _key, topic, headers) =>
+        runWithExtractedContext(headers['traceparent'], () =>
+          withSpan('kafka.consume.training_example', { 'messaging.destination': topic }, () =>
+            handleTrainingExample(trainingRepository, topic, payload),
+          ),
+        ),
+    }),
+    consumeWithDlq({
       consumer: caseCreationConsumer,
       producer,
       topics: ['transaction.decided'],
@@ -146,7 +165,13 @@ async function main(): Promise<void> {
     consumeWithDlq({
       consumer: auditConsumer,
       producer,
-      topics: ['transaction.received', 'transaction.decided', 'review.created', 'review.completed'],
+      topics: [
+        'transaction.received',
+        'transaction.decided',
+        'review.created',
+        'review.completed',
+        'model.updated',
+      ],
       maxAttempts: 5, // kafka-topics.md: audit's retry budget is higher than other topics' — "an audit write failing is more consequential than a feature update failing"
       logger,
       handler: (payload, _key, topic, headers) =>
@@ -159,7 +184,7 @@ async function main(): Promise<void> {
   ]);
 
   logger.info(
-    'event-worker started: outbox relay + 3 consumer groups (feature-update, case-creation, audit)',
+    'event-worker started: outbox relay + 4 consumer groups (feature-update, case-creation, audit, training-examples)',
   );
 
   let shuttingDown = false;
@@ -176,6 +201,7 @@ async function main(): Promise<void> {
       featureUpdateConsumer.disconnect(),
       caseCreationConsumer.disconnect(),
       auditConsumer.disconnect(),
+      trainingConsumer.disconnect(),
       admin.disconnect(),
       producer.disconnect(),
     ]);
