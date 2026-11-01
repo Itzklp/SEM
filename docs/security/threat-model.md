@@ -117,17 +117,95 @@ Honest accounting of what is weak _because_ this is coursework.
 ## 6. Verification
 
 Every mitigation claimed above has a corresponding test in the Phase 8 and Phase 11
-suites — a mitigation that is not tested is a mitigation that is assumed.
+suites — a mitigation that is not tested is a mitigation that is assumed. **Phase
+11's own review (below) found this was not yet true for four of these rows, and one
+row's check (`ST-RATE-001`) exposed a real bug in the mitigation itself, not just a
+missing test.**
 
-| Test             | Verifies                                                                          |
-| ---------------- | --------------------------------------------------------------------------------- |
-| `ST-001..004`    | Authentication rejects absent, malformed, expired and forged tokens               |
-| `ST-005..007`    | Authorization separates scoring, review and admin privileges                      |
-| `ST-RATE-001`    | Rate limiting triggers and returns `429`                                          |
-| `ST-REPLAY-001`  | Replayed `transactionId` returns the original decision, no duplicate side effects |
-| `ST-TAMPER-001`  | Unknown and altered fields are rejected by schema validation                      |
-| `ST-INJECT-001`  | Injection attempts in string fields are safely parameterised                      |
-| `ST-LEAK-001`    | Decision reasons contain no thresholds, weights or rule internals                 |
-| `ST-DEGRADE-001` | Induced Redis outage produces cautious-open behaviour, **not** blanket approval   |
-| CI secret scan   | No credential reaches history                                                     |
-| `pnpm audit`     | No known-vulnerable dependency at moderate severity or above                      |
+| Test              | Verifies                                                                           | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ----------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ST-001`/`ST-002` | Authentication rejects an absent or malformed token                                | VERIFIED — `fraud-api-scoring.integration.test.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `ST-003`          | Authentication rejects an **expired** token                                        | **Gap found and closed in Phase 11** — no test anywhere signed a token with a past `exp`. Added.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `ST-004`          | Authentication rejects a token **forged** with the wrong signing secret            | **Gap found and closed in Phase 11** — same absence. Added.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `ST-005..007`     | Authorization separates scoring, review and admin privileges                       | VERIFIED                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `ST-RATE-001`     | Rate limiting triggers and returns `429`                                           | **Gap found in Phase 11, and the mitigation itself was broken.** `@fastify/rate-limit`'s thrown error (a plain `Error` with `.statusCode = 429`, not a NestJS `HttpException`) fell into `HttpExceptionFilter`'s generic branch and surfaced as `500 INTERNAL_ERROR`. Verified against the real running process — 150 real concurrent requests, `X-RateLimit-Remaining` correctly counted to `0`, but every over-limit response was `500`, not `429`. Fixed in both `fraud-api` and `review-api`'s copies of the filter; reconfirmed `429` + `Retry-After` + `TOO_MANY_REQUESTS` against the real process afterward. |
+| `ST-REPLAY-001`   | Replayed `transactionId` returns the original decision, no duplicate side effects  | **Partial coverage found, now complete.** The "no duplicate side effects" half was previously proven only for a _different_ replay vector (duplicate Kafka delivery, `IT-EVT-002`). Extended the existing API-resubmission test to also assert exactly one `decisions` row and two `outbox_events` rows after a replay of the same `transactionId`.                                                                                                                                                                                                                                                                  |
+| `ST-TAMPER-001`   | Unknown and altered fields are rejected by schema validation                       | VERIFIED — `packages/contracts/src/dto/scoring.dto.test.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `ST-INJECT-001`   | Unsafe characters in identifiers are rejected before reaching SQL/Redis/Kafka keys | VERIFIED — `packages/domain/src/entities/transaction.test.ts` (literal `'user; DROP TABLE transactions;'` payload)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `ST-LEAK-001`     | Decision reasons contain no thresholds, weights or rule internals                  | VERIFIED — `packages/domain/src/decision/reasons.test.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `ST-DEGRADE-001`  | Induced Redis outage produces cautious-open behaviour, **not** blanket approval    | VERIFIED — `tests/resilience/redis-outage.resilience.test.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| CI secret scan    | No credential reaches history                                                      | Not a CI gate — manual `git check-ignore`/review discipline only (honest gap)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `pnpm audit`      | No known-vulnerable dependency at moderate severity or above                       | **NOT MET, reported honestly** — see §7                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+
+### Residual risk found in Phase 11: rate-limit bypass via `X-Forwarded-For`
+
+Both `fraud-api` and `review-api` run with Fastify's `trustProxy: true` — correct for
+when a real reverse proxy sits in front (not yet built, `ARCHITECTURE.md` §14), but
+in the CURRENT deployment there is no such proxy. A caller can set its own
+`X-Forwarded-For` and have `@fastify/rate-limit`'s per-client key treat every request
+as a different, first-seen client. This project's own Phase 9 load-test tooling
+(`tests/load/score.k6.js`) relies on exactly this property on purpose, to simulate
+many distinct merchants from one laptop — an accepted consequence of `trustProxy:
+true` without a real proxy in front, not a new defect, but not previously called out
+as a rate-limit bypass specifically. Residual: one attacker can defeat per-client
+rate limiting by rotating a spoofed header value per request. Accepted for this
+prototype (§5); the fix is the same one already named elsewhere in this project's
+docs — a real gateway that sets, and the app trusts, `X-Forwarded-For` only from the
+gateway's own address.
+
+---
+
+## 7. Dependency audit (Phase 11)
+
+`pnpm audit` on 2026-11-02, before any fix: **60 findings — 6 low, 27 moderate, 23
+high, 4 critical.** The `pnpm.overrides` block in the root `package.json` (added this
+phase, pinning only the specific vulnerable leaf package, never a parent's declared
+range) closed every critical with no code change required, verified by a full
+`pnpm typecheck` + the complete test suite passing before each one was accepted:
+
+| Package           | Was                                                   | Fixed to | Reachable at runtime?                                                                                                         |
+| ----------------- | ----------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `proxy-addr`      | 2.0.7 (IP-spoofing via IPv4-mapped IPv6 trust subnet) | ≥2.0.8   | Yes — `fastify`'s IP resolution, used by both apps                                                                            |
+| `fast-uri`        | 2.4.6/3.1.7 (host confusion)                          | ≥3.1.9   | Yes — Fastify's schema compiler                                                                                               |
+| `handlebars`      | 4.7.9 (JS injection via AST/own-property)             | ≥4.7.10  | **No** — only reachable through `ts-jest`'s own diagnostic formatting, a test-time dev dependency never shipped               |
+| `@fastify/middie` | 8.3.3 (auth bypass in child plugin scopes)            | ≥9.3.2   | **No** — requires registering Express-style `.use()` middleware; confirmed by `grep` that neither app calls `.use()` anywhere |
+
+**First attempt at a blanket `pnpm update -r --no-save` was reverted.** It resolved
+more findings at once but broke `apps/fraud-api/src/swagger.ts`'s typecheck (a
+`FastifyInstance` type-augmentation mismatch between differently-resolved copies of
+`@fastify/swagger`/`@fastify/rate-limit`'s declared types) — caught by this
+project's own "typecheck before accepting" discipline, not shipped. The scoped
+`pnpm.overrides` approach — one named package at a time, typecheck + full suite after
+each — avoided the same breakage while still closing every critical finding.
+
+**After the fix: 2 low, 20 moderate, 20 high, 0 critical.** The remaining findings,
+reviewed rather than ignored:
+
+- **`drizzle-orm` 0.36.4, SQL injection via improperly escaped SQL **identifiers**
+  (not values)**, patched at ≥0.45.2. Checked directly: `grep -rn "sql\.raw\|sql\.
+identifier\|sql\.ref" packages/persistence/src/` returns nothing — every raw `sql`
+  template in this codebase (`ModelRegistryRepository`, `ModelTrainingRepository`,
+  and every other repository) uses only static, hardcoded table/column names with
+  interpolated **values**, which drizzle's tagged template already parameterises
+  safely; nowhere does this codebase build a dynamic identifier from any input. This
+  specific CVE's exploit path does not apply to how this codebase actually uses
+  drizzle. Not fixed — the 0.36→0.45 jump is a large enough API surface to risk
+  breaking the persistence layer late in the project for a finding that is not
+  exploitable here; left as a known, reviewed, deferred item rather than silently
+  ignored.
+- **`@nestjs/platform-fastify`/`fastify` middleware-bypass findings** (URL-encoding,
+  HEAD-request, trailing-slash, path-scoped middleware bypass) — all require
+  Express-style `.use()` middleware to be registered; confirmed not used anywhere in
+  either app.
+- **`find-my-way` (Fastify's router) HTTP/2 DoS, `zod` oversized-payload memory
+  exhaustion, 5× `brace-expansion` ReDoS** — denial-of-service class findings, out of
+  scope for this audit's severity bar per this project's own security-review
+  practice (DoS is excluded; `brace-expansion` additionally is dev-tooling-only, a
+  transitive dependency of `glob`/`minimatch` used by test/build tooling, not served
+  to any client).
+- **6 low-severity findings** not individually triaged — below this audit's time
+  budget for this phase; none are critical or high.
+
+`pnpm audit`'s own CI gate (named in §6's table) does not exist as an enforced CI
+check — this review was done manually, once, for Phase 11. Recorded as an honest gap
+rather than a met claim.
