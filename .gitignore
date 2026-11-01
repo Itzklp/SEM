@@ -85,3 +85,12 @@ infrastructure/docker/volumes/
 .DS_Store
 Thumbs.db
 desktop.ini
+# Generated ML datasets, evaluation outputs, and serialized model artifacts.
+ml/datasets/*.csv
+ml/datasets/*report*.json
+ml/models/*.joblib
+ml/models/registry.json
+apps/ml-service/.venv/
+/.venv/
+apps/ml-service/**/__pycache__/
+*.py[cod]
