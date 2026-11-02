@@ -982,29 +982,71 @@ exercising it, not by inspection:**
 
 ---
 
-## Phase 11 — Hardening and final report
+## Phase 11 — Hardening and final report ✅ **COMPLETE**
 
 |                |                                               |
 | -------------- | --------------------------------------------- |
 | **Goal**       | A defensible, reproducible, documented system |
-| **Blocked by** | Phase 10                                      |
+| **Blocked by** | ~~Phase 10~~ complete                         |
 
-**Deliverables**
+**Delivered**
 
-- Security review against `docs/security/threat-model.md`; dependency audit
-- Performance regression check against the Phase 9 baseline
-- Full resilience re-run
-- Documentation completeness pass; traceability matrix filled with **actual** test results
-- Architecture review against the ADRs — including any decision that turned out to be wrong
-- Dead code and TODO cleanup
-- Final technical report (Brief §44)
-- Rehearsed demo script for all eight demos
+- **Security review** (`docs/security/threat-model.md` §6-7): found and fixed two
+  real bugs — `@fastify/rate-limit`'s `429` was being masked as a generic `500` by
+  the global exception filter (verified against the real running process: 150 real
+  concurrent requests, `X-RateLimit-Remaining` correctly counting to zero, every
+  over-limit response was `500` until fixed); three claimed `ST-*` verifications
+  (`ST-003` expired token, `ST-004` forged token, `ST-RATE-001` itself) had no test
+  anywhere until this phase, now closed. Also corrected two of this section's own
+  earlier draft claims after checking `.github/workflows/ci.yml` directly rather
+  than from memory — a CI secret-scan gate and a `pnpm audit` gate both already
+  exist.
+- **Dependency audit**: 60 findings → 2 low / 20 moderate / 20 high / 0 critical,
+  via scoped `pnpm.overrides` (one named package at a time, full test suite run
+  after each, not just typecheck). One override attempt (`@fastify/middie`)
+  typechecked cleanly but broke at runtime — a Fastify major-version mismatch that
+  only the resilience suite caught — reverted before shipping.
+- **Performance regression check** (`performance-report.md` §6): no regression at
+  the sustainable 20 TPS rate after Phases 10/11's changes; the 100 TPS figures
+  moved between runs, attributed honestly to this laptop's already-documented
+  write-path saturation sensitivity (RISK-001), not a code regression.
+- **Full resilience re-run**: found and fixed a real, reproducible bug in the test
+  suite itself — five resilience files used `hotPool` (ADR-003's 100ms
+  `statement_timeout`) for their own cleanup queries instead of `coldPool`,
+  intermittently failing 4-7 of 8 files. Initially misattributed to host
+  contention (the usual, often-correct explanation for this class of flakiness);
+  it was not that this time. Fixed; stable 8/8 across three consecutive runs
+  afterward.
+- **Architecture review** (`docs/adr/PHASE_11_ADR_REVIEW.md`): every ADR's
+  architectural shape held. Three had a specific number or claimed test that
+  turned out to be wrong: ADR-002's Redis timeout is tight for an unpooled
+  connection under concurrency; ADR-003 claims a budget-assertion test that does
+  not exist, and its configured timeouts don't match its own documented table;
+  ADR-006's "well inside the 7ms write budget" claim was wrong by 3-4 orders of
+  magnitude under load — the named root cause behind every Phase 9 NFR miss.
+- **Documentation completeness pass**: `docs/requirements/traceability-matrix.md`
+  updated across FR-016, NFR-003, NFR-005, NFR-006, NFR-008, NFR-009, NFR-015 with
+  real, current test results.
+- **Dead code / TODO cleanup**: none found — a `grep` for `TODO`/`FIXME`/`XXX`
+  across every source file in the repository returns nothing.
+- **`docs/FINAL_REPORT.md`** — the project-wide synthesis this phase's own
+  deliverable list names.
+- **`docs/DEMO_SCRIPT.md`** — eight rehearsed demos spanning the full system:
+  the three decisions, explainability, runtime policy change, the review
+  workflow and its audit trail, a real Redis outage, a real Kafka outage, ML
+  scoring with a real circuit-breaker outage and recovery, and end-to-end tracing
+  across the hot-path/cold-path gap.
 
 **Exit criteria**
 
-- Every FR and NFR traced to a test and a result
-- Every performance claim labelled TARGET / MEASURED / ESTIMATED / ASSUMED
-- Every "why" question in Brief §48 answerable from the documentation
+- ✅ Every FR and NFR traced to a test and a result — `traceability-matrix.md`,
+  updated this phase for every row that was stale
+- ✅ Every performance claim labelled — `performance-report.md` and
+  `phase10-ml-evaluation.md` both state MEASURED vs. not throughout, with the
+  hardware caveat repeated, not just stated once
+- ✅ Every "why" question answerable from the documentation — each ADR's
+  `Context`/`Alternatives considered` sections, cross-referenced against this
+  phase's own review of what actually held up in practice
 
 ---
 
