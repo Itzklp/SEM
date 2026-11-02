@@ -94,7 +94,7 @@ be a history, not just a current snapshot.
    containers. Without Docker the project could not start infrastructure, and therefore
    could not run integration tests, E2E tests, resilience tests or load tests.
 3. **Resolution:** installed via `winget install -e --id Docker.DockerDesktop`, following
-   [SETUP.md §2](./SETUP.md#2-installing-docker-desktop-required). Installed to
+   [setup.md §2](./setup.md#2-installing-docker-desktop-required). Installed to
    `%LOCALAPPDATA%\Programs\DockerDesktop` (not the historical
    `C:\Program Files\Docker\Docker` default) — the user-level PATH entry
    (`%LOCALAPPDATA%\Programs\DockerDesktop\resources\bin`) is what a _new_ shell picks
@@ -107,7 +107,7 @@ be a history, not just a current snapshot.
    docker compose version  # Docker Compose version v5.5.1
    docker run --rm hello-world   # succeeded
    ```
-5. **Outstanding from §2.3/§2.4 of SETUP.md** (disk relocation to `D:`, the `.wslconfig`
+5. **Outstanding from §2.3/§2.4 of setup.md** (disk relocation to `D:`, the `.wslconfig`
    memory cap) — not yet confirmed applied. Re-run
    `scripts/audit-environment.ps1` after applying them; the script does not currently
    check Docker's configured resource limits, only its presence.
@@ -123,7 +123,7 @@ be a history, not just a current snapshot.
 
 `terraform version` → `v1.13.0` is present on this machine, pre-existing or installed
 alongside Docker tooling. **Not currently used.** Per an explicit team decision
-recorded in [ARCHITECTURE.md §13](./architecture/ARCHITECTURE.md#13-cloud-deployment-posture-design-intent-only),
+recorded in [architecture.md §13](./architecture/architecture.md#13-cloud-deployment-posture-design-intent-only),
 cloud infrastructure-as-code is deliberately deferred — the team develops and tests
 entirely on this local machine for now and will scope an AWS (or equivalent) deployment
 phase explicitly later. Noting its presence here only so its availability is not
@@ -187,7 +187,7 @@ stack fits, but **without comfortable headroom**. This drives three concrete dec
 already reflected in the design:
 
 - Docker Compose uses **profiles**, so observability and load-generation tiers can be
-  brought up only when needed (`docs/SETUP.md §4`).
+  brought up only when needed (`docs/setup.md §4`).
 - Every container gets an explicit `mem_limit`, so an OOM is a diagnosable container
   failure rather than a machine freeze.
 - Node services run with an explicit `--max-old-space-size` rather than letting V8 size
@@ -219,7 +219,7 @@ capability.
 3. The 10 000 and 20 000 TPS scenarios will almost certainly saturate **this laptop**
    before they saturate FraudGuard's architecture. Reporting "FraudGuard saturates at
    _N_ TPS" from such a run would be false. The honest claim is: _"On the reference
-   hardware described in DEVELOPMENT_ENVIRONMENT.md §1, with load generated
+   hardware described in development-environment.md §1, with load generated
    co-resident, the system saturated at N TPS; the bottleneck was identified as X."_
 4. The **horizontal scaling experiment (1 → 2 → 4 → 8 instances)** is the part most
    damaged by this. With 4 physical cores, going beyond ~3 API instances adds no real
@@ -248,7 +248,7 @@ Prometheus and Grafana plus layers and volumes will consume roughly 4–8 GB and
 use. `D:` has 121.3 GB free.
 
 **Action:** relocate the Docker WSL2 data disk to `D:` during installation.
-Procedure in [SETUP.md §2.3](./SETUP.md#23-relocate-docker-data-to-d-strongly-recommended).
+Procedure in [setup.md §2.3](./setup.md#23-relocate-docker-data-to-d-strongly-recommended).
 
 ---
 

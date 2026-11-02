@@ -70,7 +70,7 @@ present, internals absent); the seeded generator's determinism.
 ### 3.2 Integration — `IT-`
 
 **Runs against:** real PostgreSQL, Redis and Kafka. **Deviation from this baseline,
-recorded at Phase 8 (docs/ROADMAP.md):** not Testcontainers — a persistent `docker
+recorded at Phase 8 (docs/roadmap.md):** not Testcontainers — a persistent `docker
 compose` stack (`pnpm docker:up`), the same one every developer already runs for `pnpm
 dev`. Every test tier in this project assumes that stack is already up; Testcontainers
 would spin up a second, separate set of containers per run, redundant given this
@@ -153,7 +153,7 @@ Phase 9. Detailed in [test-plan.md](./test-plan.md); results in
 
 **The measurement caveat is part of the test design, not a footnote.** The load generator
 is co-resident with the system under test on a 4-core machine
-([DEVELOPMENT_ENVIRONMENT.md §5.2](../DEVELOPMENT_ENVIRONMENT.md#52-cpu-contention--the-load-testing-measurement-problem)).
+([development-environment.md §5.2](../development-environment.md#52-cpu-contention--the-load-testing-measurement-problem)).
 Therefore every load test records **both**:
 
 - **client-side latency** (k6) — what a caller experiences, including contention

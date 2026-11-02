@@ -11,12 +11,12 @@ A real-time payment-fraud decisioning platform: an authorization request arrives
 a decision (`ALLOW`/`REVIEW`/`BLOCK`) must be returned inside a tight latency
 budget, and the decision must still be returned — degraded, never silently wrong
 — when any dependency is broken. That single constraint
-(`docs/architecture/ARCHITECTURE.md` §1) drives every other decision in the
+(`docs/architecture/architecture.md` §1) drives every other decision in the
 system: the hot-path/cold-path split, the choice of Redis for features, the
 transactional outbox for guaranteed event delivery, and the per-dependency
 degradation policy.
 
-**Services** (`ARCHITECTURE.md`, ADR-004): `fraud-api` (the hot path —
+**Services** (`architecture.md`, ADR-004): `fraud-api` (the hot path —
 authenticate, validate, fetch features, score, decide, persist, respond),
 `review-api` (analyst case queue, model registry), `event-worker` (the cold path
 — outbox relay, four independent Kafka consumer groups), `ml-service` (an
@@ -40,7 +40,7 @@ microservices — a deliberate, argued choice (ADR-004), not a default.
 | 10    | Synthetic model comparison, `MLScoringProvider`, model registry, training pipeline | ✅     |
 | 11    | Security review, dependency audit, ADR review, this report, demo script            | ✅     |
 
-Every phase's own completion report (`docs/ROADMAP.md`) lists its delivered
+Every phase's own completion report (`docs/roadmap.md`) lists its delivered
 items, deliberate deviations, and the real bugs found while building it — this
 report does not repeat that detail, only the headlines that matter across
 phases.
@@ -66,7 +66,7 @@ Three independent experiments converge on this:
   disjoint cores) made no measurable difference — ruling out scheduler
   contention as the cause.
 
-This is reported as a finding, not softened: `docs/adr/PHASE_11_ADR_REVIEW.md`
+This is reported as a finding, not softened: `docs/adr/phase-11-review.md`
 traces it directly to ADR-006's own stated assumption ("well inside the 7ms
 write budget") being wrong by three to four orders of magnitude under load on
 this specific hardware. The correctness guarantee the outbox buys — confirmed
@@ -126,13 +126,13 @@ requirement that synthetic results never be presented as real-world ones.
   `trustProxy: true` with no real reverse proxy in front yet, meaning a caller
   can spoof `X-Forwarded-For` to defeat per-client rate limiting entirely. This
   is an accepted consequence of a prototype with no gateway (the same gap
-  named in ADR-004/ARCHITECTURE.md §14 and used, deliberately, by this
+  named in ADR-004/architecture.md §14 and used, deliberately, by this
   project's own load-testing tooling) — not a new defect, but not previously
   named as a rate-limit bypass specifically.
 
 ## 6. Architecture decisions revisited
 
-Full review: `docs/adr/PHASE_11_ADR_REVIEW.md`. Summary: the architectural
+Full review: `docs/adr/phase-11-review.md`. Summary: the architectural
 _shape_ of every ADR held — no decision needed reversing. Three ADRs had a
 specific number or claimed test that turned out to be wrong, each named and
 either fixed or left as a clearly-recorded finding for whoever picks this
@@ -145,7 +145,7 @@ real bug in their own implementation, both found by testing and both fixed.
 Recorded here once, not scattered — each item traces to the phase document
 that found it:
 
-- **No gateway/load balancer exists** (`ARCHITECTURE.md` §14, still open).
+- **No gateway/load balancer exists** (`architecture.md` §14, still open).
   Blocks NFR-006 (instance-loss tolerance) and the literal "behind a load
   balancer" half of NFR-004; both have been worked around for testing
   purposes (direct multi-instance measurement, k6-side round robin) but

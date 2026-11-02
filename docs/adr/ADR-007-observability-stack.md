@@ -65,7 +65,7 @@ does not exist.
 
 `jaegertracing/all-in-one` receives OTLP/HTTP directly (no collector needed), runs with
 in-memory storage (no object-storage dependency, unlike Tempo's usual setup), and ships
-its own UI on one container. Given `DEVELOPMENT_ENVIRONMENT.md` §5.1's 4-core/7.86 GB
+its own UI on one container. Given `development-environment.md` §5.1's 4-core/7.86 GB
 capacity constraint, every added container is a real trade-off — Jaeger's footprint
 (~150–250 MB, no second dependency) is the cheapest correct answer for "can a developer
 look up one trace by id locally."

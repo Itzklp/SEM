@@ -28,11 +28,11 @@ complete when it satisfies the Definition of Done in [CONTRIBUTING.md](../CONTRI
 **Delivered:**
 
 - Environment audit, reproducible via `scripts/audit-environment.ps1` (verified: exits 1 on missing prerequisites)
-- `docs/DEVELOPMENT_ENVIRONMENT.md` with the prerequisite matrix, capacity analysis and the co-location measurement problem
-- `docs/SETUP.md`
+- `docs/development-environment.md` with the prerequisite matrix, capacity analysis and the co-location measurement problem
+- `docs/setup.md`
 - Git repository initialised; monorepo structure
 - Requirements baseline with FR/NFR IDs, assumptions, constraints, risk register
-- `ARCHITECTURE.md` with C4 context and container views
+- `architecture.md` with C4 context and container views
 - ADRs 001–006
 - This roadmap; the three-developer task breakdown
 
@@ -226,7 +226,7 @@ partial, not claimed complete.
   see below)
 - Risk-lookup read mechanism with default-on-miss (`risk-lookup.ts`); seeding real
   merchant/IP reference data is Phase 5's named deliverable
-  (`docs/TEAM_TASK_BREAKDOWN.md`), not pulled forward
+  (`docs/team-task-breakdown.md`), not pulled forward
 - Two pipelined Redis round trips per fetch (not one per feature — see below) via
   `fraud-api`'s existing `ScoringService`, wired in place of the Phase 3 placeholder,
   with an explicit ADR-005 cautious-open fallback (`tryGetFeatureVector`) on Redis
@@ -247,7 +247,7 @@ hidden:**
    characteristics — "small per entity" — exact counting over a pulled window is
    cheap and avoids HLL's probabilistic error for no real benefit at this scale.
 2. **Feature _writes_ are not wired to a Kafka consumer.** `apps/event-worker` and the
-   outbox relay are Phase 6 deliverables (`ARCHITECTURE.md`'s service table: "Feature
+   outbox relay are Phase 6 deliverables (`architecture.md`'s service table: "Feature
    engine — write | event-worker"); nothing publishes `transaction.decided` yet.
    `recordTransactionFeatures()` is the consumer's entire body, already built and
    tested — Phase 6's job is to call it from a Kafka handler, not design it. Proved
@@ -438,7 +438,7 @@ figure) this kind of drift is exactly why that phase exists.
   consumer groups (feature-update, case-creation, audit), each able to lag or fail
   without blocking the others (`kafka-topics.md`'s per-consumer-group isolation,
   actually built). The relay and all three consumers run in this one process
-  (ARCHITECTURE.md §12 question 1, now resolved: co-located, not a separate deployable
+  (architecture.md §12 question 1, now resolved: co-located, not a separate deployable
   — nothing about this prototype's load justifies a fourth one)
 - `apps/review-api` (new app) — case queue (`GET /fraud/cases`, filterable, paginated),
   `POST /fraud/cases/:id/review` (`APPROVE`/`BLOCK`/`ESCALATE`, reviewer identity from
@@ -721,7 +721,7 @@ host-run, not containerised) — fixed with `host.docker.internal` plus an
   Kafka) is running via `pnpm docker:up`, the same infrastructure every developer already
   has up for `pnpm dev`. Testcontainers would spin up a SECOND, separate set of containers
   per test run — redundant given this project's actual workflow, and slower on this
-  hardware (DEVELOPMENT_ENVIRONMENT.md §5.1) for no isolation benefit this project's scope
+  hardware (development-environment.md §5.1) for no isolation benefit this project's scope
   needs
 - `tests/contract/event-schema-contract.test.ts` — producer ↔ consumer: every event
   type's producer-built envelope round-trips through the real Kafka wire format
@@ -756,7 +756,7 @@ testing/test-plan.md` §1 has the full table. 5 of ADR-005's 7 policy-table rows
    honestly later.
 3. **`RT-INST-001` (instance-loss resilience) is deferred.** "Traffic simply moves to
    remaining instances" requires a gateway/load balancer in front of `fraud-api`, which
-   Phase 3 deliberately did not build (ARCHITECTURE.md §14 question 3, still open — not
+   Phase 3 deliberately did not build (architecture.md §14 question 3, still open — not
    resolved by this phase either). `fraud-api`'s statelessness, the precondition that
    claim depends on, is exercised implicitly by every resilience test sharing one
    Postgres/Redis across a long suite run without incident, but the literal
@@ -841,7 +841,7 @@ pg-errors.ts`), distinguishing "Postgres is down" from "this query has a real bu
 
 - ✅ Every scenario in the 500→20 000 TPS matrix executed and recorded, including every one that failed
 - ✅ Every stage marked against its NFR — all six **FAILED** NFR-001/002; the scaling experiment **FAILED** NFR-004 — recorded as such in `docs/requirements/traceability-matrix.md`, not softened
-- ✅ **Saturation point identified, bottleneck named**: Postgres's synchronous-commit (WAL fsync) write path under Docker Desktop's WSL2 virtualised disk, confirmed three independent ways — a pool-size fix that helped at light load and stopped helping at saturation (§2), flat-to-negative horizontal scaling (§3, exactly as `DEVELOPMENT_ENVIRONMENT.md` §5.2 predicted in advance), and CPU pinning that made no measurable difference (§4, ruling out k6-vs-`fraud-api` scheduling contention as the cause)
+- ✅ **Saturation point identified, bottleneck named**: Postgres's synchronous-commit (WAL fsync) write path under Docker Desktop's WSL2 virtualised disk, confirmed three independent ways — a pool-size fix that helped at light load and stopped helping at saturation (§2), flat-to-negative horizontal scaling (§3, exactly as `development-environment.md` §5.2 predicted in advance), and CPU pinning that made no measurable difference (§4, ruling out k6-vs-`fraud-api` scheduling contention as the cause)
 - ✅ Every claim in the report traces to a reproducible run under `perf-runs/`; no estimated number presented as measured
 - ✅ The RISK-001 hardware caveat appears throughout the report, not just once at the top
 
@@ -854,8 +854,8 @@ pg-errors.ts`), distinguishing "Postgres is down" from "this query has a real bu
 
 **Deliberate deviations, recorded rather than silently taken:**
 
-1. **No second physical machine (RISK-001 mitigation A)** — not available this session. Mitigations B+C+D (pinning, capped scaling, dual latency series) were applied instead, per `DEVELOPMENT_ENVIRONMENT.md` §5.2's own recommendation.
-2. **The horizontal-scaling experiment uses k6-side round robin across ports, not a real gateway/load balancer** — Phase 3 deliberately never built one (`ARCHITECTURE.md` §14). NFR-004's throughput claim is still testable this way; "behind a load balancer" literally is not.
+1. **No second physical machine (RISK-001 mitigation A)** — not available this session. Mitigations B+C+D (pinning, capped scaling, dual latency series) were applied instead, per `development-environment.md` §5.2's own recommendation.
+2. **The horizontal-scaling experiment uses k6-side round robin across ports, not a real gateway/load balancer** — Phase 3 deliberately never built one (`architecture.md` §14). NFR-004's throughput claim is still testable this way; "behind a load balancer" literally is not.
 3. **NFR-003 (in-service p99 < 50ms) was not re-verified at Phase 4/5's own component level** — this phase's server-side numbers are the END-TO-END request histogram under load (dominated by §2's bottleneck), a different claim from Phase 4/5's feature-fetch sub-budget measurement, which still stands on its own.
 
 ---
@@ -1017,7 +1017,7 @@ exercising it, not by inspection:**
   contention (the usual, often-correct explanation for this class of flakiness);
   it was not that this time. Fixed; stable 8/8 across three consecutive runs
   afterward.
-- **Architecture review** (`docs/adr/PHASE_11_ADR_REVIEW.md`): every ADR's
+- **Architecture review** (`docs/adr/phase-11-review.md`): every ADR's
   architectural shape held. Three had a specific number or claimed test that
   turned out to be wrong: ADR-002's Redis timeout is tight for an unpooled
   connection under concurrency; ADR-003 claims a budget-assertion test that does
@@ -1029,9 +1029,9 @@ exercising it, not by inspection:**
   real, current test results.
 - **Dead code / TODO cleanup**: none found — a `grep` for `TODO`/`FIXME`/`XXX`
   across every source file in the repository returns nothing.
-- **`docs/FINAL_REPORT.md`** — the project-wide synthesis this phase's own
+- **`docs/final-report.md`** — the project-wide synthesis this phase's own
   deliverable list names.
-- **`docs/DEMO_SCRIPT.md`** — eight rehearsed demos spanning the full system:
+- **`docs/demo-script.md`** — eight rehearsed demos spanning the full system:
   the three decisions, explainability, runtime policy change, the review
   workflow and its audit trail, a real Redis outage, a real Kafka outage, ML
   scoring with a real circuit-breaker outage and recovery, and end-to-end tracing

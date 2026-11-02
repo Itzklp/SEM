@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-02. **Method:** each ADR's `Decision` and `Consequences` sections
 checked against what Phases 1-10 actually measured, not re-argued from first
-principles. Per `docs/ROADMAP.md`'s own instruction for this phase: name any
+principles. Per `docs/roadmap.md`'s own instruction for this phase: name any
 decision that turned out to be wrong, not just the ones that held up.
 
 ## ADR-001 — Kafka never in the authorization path

@@ -31,7 +31,7 @@ Access characteristics:
 - Tolerant of **bounded staleness**: features updated a second ago are fine; features
   requiring a 40 ms read are not.
 
-Within the 40 ms service budget (ARCHITECTURE.md §2), feature retrieval is allocated
+Within the 40 ms service budget (architecture.md §2), feature retrieval is allocated
 **8 ms**.
 
 ## Decision

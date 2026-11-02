@@ -3,7 +3,7 @@
 Gets a developer from a clean Windows machine to a running FraudGuard stack.
 
 The measured state of the reference machine, and the reasoning behind the choices here,
-is in [DEVELOPMENT_ENVIRONMENT.md](./DEVELOPMENT_ENVIRONMENT.md). Read that first if you
+is in [development-environment.md](./development-environment.md). Read that first if you
 want the _why_; this document is the _how_.
 
 **Target time:** ~45 minutes, most of it Docker Desktop downloading.
@@ -174,7 +174,7 @@ broad `git add`.**
 
 Infrastructure is grouped into Docker Compose **profiles** so that a constrained machine
 only runs what the current task needs. This is a direct consequence of the capacity
-analysis in DEVELOPMENT_ENVIRONMENT.md §5.1.
+analysis in development-environment.md §5.1.
 
 | Profile         | Contains                            | Approx. RAM | Use when                                                 |
 | --------------- | ----------------------------------- | ----------- | -------------------------------------------------------- |
@@ -337,6 +337,6 @@ docker compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-se
 | Kafka container restarts repeatedly            | Insufficient memory for the JVM                 | Raise `memory` in `.wslconfig`, or stop the `observability` profile while developing                         |
 | `EADDRINUSE` on 3000/5432/6379/9092            | Port taken by another process                   | `netstat -ano \| findstr :3000`, then stop the owner                                                         |
 | Integration tests fail with connection refused | `core` profile not running                      | `pnpm docker:up`, wait for health checks                                                                     |
-| Load-test latency is wildly inconsistent       | k6 competing with the system under test for CPU | Expected on this hardware — see DEVELOPMENT_ENVIRONMENT.md §5.2. Do not report such a run without the caveat |
+| Load-test latency is wildly inconsistent       | k6 competing with the system under test for CPU | Expected on this hardware — see development-environment.md §5.2. Do not report such a run without the caveat |
 | `C:` fills up                                  | Docker data still on `C:`                       | §2.3                                                                                                         |
 | pnpm reports missing workspace package         | Stale install                                   | `pnpm install --force`                                                                                       |

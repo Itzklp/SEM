@@ -141,7 +141,7 @@ unasserted warm-up request before its real assertions.
 ## Circuit breaker, verified against the real process (RT-ML-001)
 
 `tests/resilience/ml-outage.resilience.test.ts` — deferred from Phase 8
-(`docs/ROADMAP.md`'s own Phase 8 section: "no `MLScoringProvider` yet"), built
+(`docs/roadmap.md`'s own Phase 8 section: "no `MLScoringProvider` yet"), built
 now that one exists. Spawns and kills a real `uvicorn` child process (never a
 mock), on its own test port, and drives the full lifecycle: closed → scores via
 the real model → killed → every request falls back to `rules` with

@@ -1,11 +1,11 @@
 # Phase 2 — Infrastructure: Measured Results
 
-**Date:** 2026-09-08 · **Machine:** as described in [DEVELOPMENT_ENVIRONMENT.md §1](../../DEVELOPMENT_ENVIRONMENT.md#1-detected-hardware)
+**Date:** 2026-09-08 · **Machine:** as described in [development-environment.md §1](../../development-environment.md#1-detected-hardware)
 (Intel i5-9300H, 4 cores / 8 logical, 7.86 GB RAM) · **Docker:** 29.7.2, Compose v5.5.1
 
 This is a **MEASURED** report — every number below came from an actual `docker compose
 up` run on this machine, not an estimate. It replaces the corresponding rows of the
-capacity analysis in [DEVELOPMENT_ENVIRONMENT.md §5.1](../../DEVELOPMENT_ENVIRONMENT.md#51-estimated-resident-memory-of-the-full-local-stack),
+capacity analysis in [development-environment.md §5.1](../../development-environment.md#51-estimated-resident-memory-of-the-full-local-stack),
 which is left in place (marked superseded below) rather than deleted, per the project's
 rule that ESTIMATED and MEASURED are always distinguished, not silently swapped.
 
@@ -81,7 +81,7 @@ number** — that is the actual test of the capacity analysis, not this idle bas
 
 **What this idle measurement does establish solidly:** the _floor_ is far more
 comfortable than Phase 0 feared. With 602 MB in use against 7.86 GB total (and ~5 GB
-allotted to WSL2 per `SETUP.md §2.4`), there is substantial headroom for `fraud-api`
+allotted to WSL2 per `setup.md §2.4`), there is substantial headroom for `fraud-api`
 instances, k6, and normal host-side work (IDE, browser) even before any tuning.
 
 ### Not yet measured (still ESTIMATED — tracked, not lost)

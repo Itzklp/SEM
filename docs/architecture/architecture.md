@@ -397,7 +397,7 @@ because both run through the identical pipeline.
 constraint, not a deliverable — the team decided (2026-09-07) to develop and validate
 entirely on local Docker Compose for now, and to scope an AWS-or-equivalent deployment as
 its own explicit phase later, if and when requested. Terraform is present on the
-development machine but is **not used** (see DEVELOPMENT_ENVIRONMENT.md §3).
+development machine but is **not used** (see development-environment.md §3).
 
 The reason this is worth recording now rather than leaving implicit: RISK-001 means
 several NFRs — horizontal scaling (NFR-004), throughput at high load (NFR-001) — cannot

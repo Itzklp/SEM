@@ -140,7 +140,7 @@ missing test.**
 ### Residual risk found in Phase 11: rate-limit bypass via `X-Forwarded-For`
 
 Both `fraud-api` and `review-api` run with Fastify's `trustProxy: true` — correct for
-when a real reverse proxy sits in front (not yet built, `ARCHITECTURE.md` §14), but
+when a real reverse proxy sits in front (not yet built, `architecture.md` §14), but
 in the CURRENT deployment there is no such proxy. A caller can set its own
 `X-Forwarded-For` and have `@fastify/rate-limit`'s per-client key treat every request
 as a different, first-seen client. This project's own Phase 9 load-test tooling

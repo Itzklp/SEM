@@ -168,5 +168,5 @@ Published rows are pruned by a retention job; the durable history lives in
 ### Neutral
 
 - The relay's home (inside `event-worker` versus its own process) is deliberately left
-  open — ARCHITECTURE.md §12 question 1, to be decided in Phase 6 with the pattern
+  open — architecture.md §12 question 1, to be decided in Phase 6 with the pattern
   already in place either way.

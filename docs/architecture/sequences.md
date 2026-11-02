@@ -2,7 +2,7 @@
 
 **Version:** 1.0 (baseline) · **Date:** 2026-09-07
 
-The primary scoring sequence is in [ARCHITECTURE.md §7](./ARCHITECTURE.md#7-sequence--a-scored-authorization).
+The primary scoring sequence is in [architecture.md §7](./architecture.md#7-sequence--a-scored-authorization).
 This document covers the two remaining flows named in the roadmap: the review workflow
 and the degraded-mode path.
 

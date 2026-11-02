@@ -10,7 +10,7 @@ labelled otherwise. No estimated number is presented as measured.
   (hyperthreaded)**, 8.4 GB RAM. Confirmed via `Get-CimInstance
 Win32_Processor` and `docker info` (Docker Desktop/WSL2 sees all 8 logical
   CPUs; 3.76 GB allocated to the WSL2 VM). Matches
-  `docs/DEVELOPMENT_ENVIRONMENT.md` §5.2's audit exactly — nothing about this
+  `docs/development-environment.md` §5.2's audit exactly — nothing about this
   phase's findings is a surprise relative to that audit; this report is where
   it gets a measured number instead of an estimate.
 - **RISK-001, in force for every number in this report**: the load generator
@@ -47,7 +47,7 @@ Win32_Processor` and `docker info` (Docker Desktop/WSL2 sees all 8 logical
   `RATE_LIMIT_MAX_REQUESTS=100`/s-per-client is exercised the way production
   traffic from many real merchants would, instead of the single real source
   IP this laptop actually has.
-- **Every target TPS in `docs/ROADMAP.md`'s list was executed, including the
+- **Every target TPS in `docs/roadmap.md`'s list was executed, including the
   ones that fail** — nothing is dropped from the table for saturating.
 
 ## 1. Sustained-throughput matrix (NFR-001, NFR-002)
@@ -144,7 +144,7 @@ for whoever picks this phase's findings up, not exercised.
 Capped at 1 → 2 → 3 `fraud-api` instances (mitigation C, per §5.2: beyond
 ~3 processes on 4 physical cores adds no real parallelism and would measure
 this laptop, not the architecture). No gateway/load balancer exists in front
-of `fraud-api` (Phase 3's deliberate deferral, `ARCHITECTURE.md` §14) — k6
+of `fraud-api` (Phase 3's deliberate deferral, `architecture.md` §14) — k6
 itself round-robins across instances (`BASE_URLS`) for this experiment,
 recorded as a deliberate deviation from "behind a load balancer," not a
 hidden one. Each instance used its own `POSTGRES_POOL_HOT_MAX=25` (kept the
@@ -159,7 +159,7 @@ combined pool ceiling across up to 3 instances safely under Postgres's
 
 **NFR-004 (throughput increases materially 1→2→3+): NOT MET.** Throughput is
 flat from 1→2 instances and **decreases** at 3 — exactly the flat-to-negative
-scaling `DEVELOPMENT_ENVIRONMENT.md` §5.2 predicted in advance, for the same
+scaling `development-environment.md` §5.2 predicted in advance, for the same
 reason as §2b: the shared Postgres write-commit path, not `fraud-api`'s own
 CPU, is the constraint. Adding more `fraud-api` processes adds more
 contention for that one shared, already-saturated resource, not more
