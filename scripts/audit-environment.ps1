@@ -5,7 +5,7 @@
 .DESCRIPTION
     Detects required tooling and hardware capacity, and reports each item as
     INSTALLED or MISSING with the detected version. Produces the same shape of
-    data as docs/DEVELOPMENT_ENVIRONMENT.md so the document can be verified
+    data as docs/development-environment.md so the document can be verified
     rather than trusted.
 
     Exits 1 if any REQUIRED tool is missing, so it can gate CI or a setup script.
@@ -98,10 +98,10 @@ if (-not $Quiet) {
         Format-Table -AutoSize
 
     # Docker's default disk image location is on C:. The capacity analysis in
-    # DEVELOPMENT_ENVIRONMENT.md 5.3 calls for relocating it when C: is tight.
+    # development-environment.md 5.3 calls for relocating it when C: is tight.
     $systemDrive = Get-PSDrive -Name ($env:SystemDrive.TrimEnd(':')) -ErrorAction SilentlyContinue
     if ($systemDrive -and ($systemDrive.Free / 1GB) -lt 50) {
-        Write-Warning ('System drive has only {0} GB free. See docs/SETUP.md 2.3 for relocating Docker data.' -f [math]::Round($systemDrive.Free / 1GB, 1))
+        Write-Warning ('System drive has only {0} GB free. See docs/setup.md 2.3 for relocating Docker data.' -f [math]::Round($systemDrive.Free / 1GB, 1))
     }
 }
 
@@ -114,5 +114,5 @@ if ($missing.Count -eq 0) {
 }
 
 Write-Output ('RESULT: {0} required tool(s) MISSING -> {1}' -f $missing.Count, ($missing.Tool -join ', '))
-Write-Output 'Remediation: docs/SETUP.md'
+Write-Output 'Remediation: docs/setup.md'
 exit 1

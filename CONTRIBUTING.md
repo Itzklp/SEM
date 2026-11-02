@@ -250,7 +250,7 @@ The project's credibility rests on this section.
 
 **Never write** "FraudGuard supports 10 000 TPS."
 **Write** "FraudGuard was tested at 10 000 TPS on the hardware in
-DEVELOPMENT_ENVIRONMENT.md §1, measuring p99 = X ms and an error rate of Y%."
+development-environment.md §1, measuring p99 = X ms and an error rate of Y%."
 
 Every performance number must be reproducible by a teammate from the documented
 procedure. If it cannot be reproduced, it is not a result.

@@ -1,6 +1,6 @@
 # Points Grafana at the dashboards folder so every .json file there is
 # loaded automatically on start — dashboards are code, versioned in git,
-# never hand-built in the UI (docs/ROADMAP.md Phase 7 exit criterion).
+# never hand-built in the UI (docs/roadmap.md Phase 7 exit criterion).
 apiVersion: 1
 
 providers:

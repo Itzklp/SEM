@@ -20,7 +20,7 @@ rules and a pluggable risk-scoring provider.
 > decision inside a strict latency budget, and keep working when parts of the system
 > fail?
 
-That framing drives every decision in [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md).
+That framing drives every decision in [docs/architecture/architecture.md](docs/architecture/architecture.md).
 
 ---
 
@@ -38,7 +38,7 @@ and contracts come before implementation, and ML comes last.
 | 10 — Machine learning          | ⬜ Planned (**last**, by design)             |
 | 11 — Hardening                 | ⬜ Planned                                   |
 
-Detail: [docs/ROADMAP.md](docs/ROADMAP.md)
+Detail: [docs/roadmap.md](docs/roadmap.md)
 
 ### ⚠️ Before you can run anything
 
@@ -50,7 +50,7 @@ winget install -e --id Docker.DockerDesktop        # GAP-001 — blocking
 ```
 
 Docker requires a reboot and **resource limits** — a 7.86 GB machine will swap without
-them. Follow [docs/SETUP.md §2](docs/SETUP.md#2-installing-docker-desktop-required)
+them. Follow [docs/setup.md §2](docs/setup.md#2-installing-docker-desktop-required)
 rather than installing ad hoc.
 
 Verify at any time:
@@ -76,7 +76,7 @@ presented as achieved until a reproducible test has produced it.
 > **Measurement caveat.** The load generator runs on the same 4-core machine as the
 > system under test, so high-load latency figures will be pessimistic and partly reflect
 > CPU contention rather than the platform. This is documented and mitigated rather than
-> ignored — [DEVELOPMENT_ENVIRONMENT.md §5.2](docs/DEVELOPMENT_ENVIRONMENT.md#52-cpu-contention--the-load-testing-measurement-problem).
+> ignored — [development-environment.md §5.2](docs/development-environment.md#52-cpu-contention--the-load-testing-measurement-problem).
 
 ---
 
@@ -124,13 +124,13 @@ distinctly everywhere in this repository. A test that fails is reported as faili
 
 | Document                                                           | What it covers                                        |
 | ------------------------------------------------------------------ | ----------------------------------------------------- |
-| [SETUP.md](docs/SETUP.md)                                          | Getting a machine running                             |
-| [DEVELOPMENT_ENVIRONMENT.md](docs/DEVELOPMENT_ENVIRONMENT.md)      | Measured environment audit, capacity analysis, gaps   |
-| [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md)               | C4 views, hot/cold paths, failure behaviour, patterns |
+| [setup.md](docs/setup.md)                                          | Getting a machine running                             |
+| [development-environment.md](docs/development-environment.md)      | Measured environment audit, capacity analysis, gaps   |
+| [architecture.md](docs/architecture/architecture.md)               | C4 views, hot/cold paths, failure behaviour, patterns |
 | [requirements.md](docs/requirements/requirements.md)               | FR/NFR baseline, assumptions, constraints, risks      |
 | [traceability-matrix.md](docs/requirements/traceability-matrix.md) | Requirement → design → code → test → result           |
-| [ROADMAP.md](docs/ROADMAP.md)                                      | Phases, deliverables, exit criteria                   |
-| [TEAM_TASK_BREAKDOWN.md](docs/TEAM_TASK_BREAKDOWN.md)              | Three-developer allocation                            |
+| [roadmap.md](docs/roadmap.md)                                      | Phases, deliverables, exit criteria                   |
+| [team-task-breakdown.md](docs/team-task-breakdown.md)              | Three-developer allocation                            |
 | [CONTRIBUTING.md](CONTRIBUTING.md)                                 | Standards and Definition of Done                      |
 | [SECURITY.md](SECURITY.md)                                         | Security posture                                      |
 
@@ -188,7 +188,7 @@ pnpm db:migrate
 pnpm dev
 ```
 
-Full instructions and the command reference: [docs/SETUP.md](docs/SETUP.md).
+Full instructions and the command reference: [docs/setup.md](docs/setup.md).
 
 ---
 

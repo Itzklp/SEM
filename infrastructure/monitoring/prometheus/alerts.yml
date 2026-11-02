@@ -1,4 +1,4 @@
-# FraudGuard — Prometheus alert rules (Phase 7, docs/ROADMAP.md's five
+# FraudGuard — Prometheus alert rules (Phase 7, docs/roadmap.md's five
 # named deliverables). No Alertmanager is deployed alongside this — a
 # deliberate scope decision, not an oversight: these rules ARE evaluated
 # by Prometheus and their firing state IS visible (the Prometheus UI's
@@ -54,11 +54,11 @@ groups:
           severity: warning
         annotations:
           summary: "Consumer group {{ $labels.group }} is lagging on {{ $labels.topic }}"
-          description: "ARCHITECTURE.md §8: event-worker down is a 'Deferred' failure mode — lag growing is expected briefly, but not sustained past 5 minutes at this depth."
+          description: "architecture.md §8: event-worker down is a 'Deferred' failure mode — lag growing is expected briefly, but not sustained past 5 minutes at this depth."
 
   - name: fraudguard.decisions
     rules:
-      # ARCHITECTURE.md §8: "the degraded flag ... is persisted and
+      # architecture.md §8: "the degraded flag ... is persisted and
       # exported as a metric, so the proportion of degraded decisions is
       # visible on the dashboard and can be alerted on" — this rule is
       # that alert, named verbatim in that doc.

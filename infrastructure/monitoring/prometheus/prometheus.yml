@@ -3,7 +3,7 @@
 # Phase 2 wired this up with container-name targets (`fraud-api:3000`,
 # etc.) anticipating a containerised `apps` profile. Phase 7 is the first
 # phase where these targets actually serve `/metrics` — and by then,
-# ARCHITECTURE.md/ROADMAP.md's own repeated pattern (Phase 3's fraud-api,
+# architecture.md/roadmap.md's own repeated pattern (Phase 3's fraud-api,
 # Phase 6's event-worker) had already settled the apps profile as
 # permanently empty: every app runs on the HOST via `pnpm dev`, the same
 # way `fraud-api` always has, not as a container. A container-name target

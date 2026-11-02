@@ -1,6 +1,6 @@
 # FraudGuard — local development infrastructure.
 #
-# Profiles (ADR-002/DEVELOPMENT_ENVIRONMENT.md §5.1 capacity constraint —
+# Profiles (ADR-002/development-environment.md §5.1 capacity constraint —
 # 4 cores / 7.86GB): bring up only what the current task needs.
 #
 #   core         PostgreSQL, Redis, Kafka (KRaft) — everyday development
@@ -8,7 +8,7 @@
 #   apps         + fraud-api, event-worker, review-api — full containerised stack (Phase 3+)
 #
 # Usage: see package.json's docker:up / docker:up:obs / docker:up:all / docker:down.
-# Full rationale: docs/SETUP.md §4.
+# Full rationale: docs/setup.md §4.
 
 name: fraudguard
 
@@ -64,7 +64,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
-    # DEVELOPMENT_ENVIRONMENT.md §5.1 estimated 300-500MB; measured figure
+    # development-environment.md §5.1 estimated 300-500MB; measured figure
     # replaces this in docs/testing/test-results/.
     mem_limit: 512m
     logging: *default-logging
@@ -135,7 +135,7 @@ services:
       # per-topic retention from the catalogue — auto-create would silently
       # produce topics with the WRONG retention/partition config.
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
-      # Bounded JVM heap — DEVELOPMENT_ENVIRONMENT.md §5.1: Kafka is the
+      # Bounded JVM heap — development-environment.md §5.1: Kafka is the
       # largest single memory consumer in the stack on this hardware.
       KAFKA_HEAP_OPTS: "-Xmx768m -Xms768m"
     ports:
@@ -155,7 +155,7 @@ services:
       # retry budget rather than a false "unhealthy" during normal startup.
       retries: 15
       start_period: 30s
-    # Estimated 1.2-1.6GB (DEVELOPMENT_ENVIRONMENT.md §5.1); heap capped at
+    # Estimated 1.2-1.6GB (development-environment.md §5.1); heap capped at
     # 768MB above, limit leaves room for off-heap (page cache, metaspace).
     mem_limit: 1200m
     logging: *default-logging
@@ -224,7 +224,7 @@ services:
   # and one fewer Postgres-adjacent dependency to reason about. Chosen
   # over Tempo specifically because Tempo wants an object-storage backend
   # (S3-compatible) even for local use, which is a second new dependency
-  # this prototype's scope does not justify (DEVELOPMENT_ENVIRONMENT.md
+  # this prototype's scope does not justify (development-environment.md
   # §5.1's 4-core/7.86GB capacity constraint — every added container is a
   # real trade-off here, not a free add).
   jaeger:

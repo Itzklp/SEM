@@ -1,6 +1,6 @@
 # Provisions Prometheus as Grafana's default datasource automatically on
 # container start — "no manual UI configuration" is a Phase 7 exit
-# criterion (docs/ROADMAP.md), satisfied from Phase 2 onward.
+# criterion (docs/roadmap.md), satisfied from Phase 2 onward.
 apiVersion: 1
 
 datasources:

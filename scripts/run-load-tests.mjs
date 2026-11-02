@@ -20,7 +20,7 @@
  *     sample of TotalProcessorTime, converted to a percentage over the
  *     run's wall-clock duration and this machine's logical core count)
  *
- * RISK-001 (DEVELOPMENT_ENVIRONMENT.md §5.2): k6 and fraud-api run
+ * RISK-001 (development-environment.md §5.2): k6 and fraud-api run
  * co-resident on this one 4-core/8-thread laptop. This script does not
  * paper over that — every result records both latency series and the
  * hardware caveat travels into the report, never silently dropped.
@@ -43,7 +43,7 @@ const STAGES = (process.env.STAGES || '500,1000,2000,5000,10000,20000')
 const RAMP_SECONDS = Number(process.env.RAMP_SECONDS || 10);
 const STEADY_SECONDS = Number(process.env.STEADY_SECONDS || 20);
 const COOLDOWN_SECONDS = Number(process.env.COOLDOWN_SECONDS || 10);
-const LOGICAL_CORES = 8; // i5-9300H: 4 physical / 8 logical (DEVELOPMENT_ENVIRONMENT.md §5.2) — Windows has no cgroup cpu.max to read back portably from Node.
+const LOGICAL_CORES = 8; // i5-9300H: 4 physical / 8 logical (development-environment.md §5.2) — Windows has no cgroup cpu.max to read back portably from Node.
 
 function sh(cmd, args) {
   // bare `.exe`s (powershell, docker, k6) resolve fine without a shell.
