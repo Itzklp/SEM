@@ -2,7 +2,7 @@ import type { TransactionStatus } from '../enums';
 import { IllegalTransitionError } from '../errors';
 
 /**
- * The transaction lifecycle graph from ARCHITECTURE.md §9. Encoded as an
+ * The transaction lifecycle graph from architecture.md §9. Encoded as an
  * explicit adjacency map — rather than scattered `if` checks at each call
  * site — so the legal graph exists in exactly one place and is itself
  * unit-testable as data.

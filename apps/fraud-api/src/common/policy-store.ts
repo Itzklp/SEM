@@ -25,7 +25,7 @@ import { APP_CONFIG } from './config.provider';
  * short of the larger one, rather than a half-built version of both.
  *
  * Single-process, in-memory, by design: this prototype runs one
- * `fraud-api` instance (DEVELOPMENT_ENVIRONMENT.md's capacity
+ * `fraud-api` instance (development-environment.md's capacity
  * constraint). Propagating a policy change across multiple instances
  * (shared state, or a pub/sub invalidation) is a real problem a
  * horizontally-scaled deployment would have to solve — out of scope

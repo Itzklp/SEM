@@ -89,7 +89,7 @@ export const rawEnvSchema = z.object({
 
   // --- Scoring provider (CON-005) --------------------------------------------
   // Default is 'rules' as of Phase 5: RuleBasedScoringProvider is the
-  // system's real, demonstrable, zero-ML scorer (docs/ROADMAP.md Phase 5
+  // system's real, demonstrable, zero-ML scorer (docs/roadmap.md Phase 5
   // gate). 'stub' remains available and meaningful on its own — a
   // genuinely simpler deterministic baseline, not a discarded Phase 3
   // leftover — but it is no longer the intended default now that a

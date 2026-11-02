@@ -3,7 +3,7 @@ import { Counter, Gauge, Histogram } from 'prom-client';
 import { registry } from './registry';
 
 /**
- * The eleven metrics named in `docs/ROADMAP.md`'s Phase 7 deliverable
+ * The eleven metrics named in `docs/roadmap.md`'s Phase 7 deliverable
  * list, defined exactly once here so every app (`fraud-api`, `review-api`,
  * `event-worker`) observes the SAME metric object shape — a histogram
  * redefined per app with different buckets would make cross-service
@@ -19,7 +19,7 @@ export const transactionsTotal = new Counter({
   registers: [registry],
 });
 
-/** Every decision fraud-api's decision engine reaches. `degraded` is ADR-005's flag — ARCHITECTURE.md §8: "the proportion of degraded decisions is visible on the dashboard and can be alerted on." */
+/** Every decision fraud-api's decision engine reaches. `degraded` is ADR-005's flag — architecture.md §8: "the proportion of degraded decisions is visible on the dashboard and can be alerted on." */
 export const fraudDecisionsTotal = new Counter({
   name: 'fraud_decisions_total',
   help: 'Total fraud decisions, labelled by decision outcome and whether the decision was degraded.',

@@ -31,30 +31,23 @@ import { startKafkaLagPoller } from './metrics/kafka-lag-poller';
 import { startOutboxGaugePoller } from './metrics/outbox-gauge-poller';
 import { startOutboxRelay } from './relay/outbox-relay';
 
-/** ASSUMED — no measured SLO to tune this against yet; matches Prometheus's own 15s scrape_interval (infrastructure/monitoring/prometheus/prometheus.yml), so the gauge is never more than one scrape behind a fresh poll regardless. */
+/** No measured SLO yet; matches Prometheus's own 15s scrape_interval. */
 const LAG_POLL_INTERVAL_MS = 15_000;
 
 /**
  * The cold path (ADR-001): the outbox relay plus four independent Kafka
- * consumer groups (feature-update, case-creation, audit, training-examples) — each its own
- * consumer group (kafka-topics.md: "so one slow or failed consumer never
- * blocks another from processing the same topic"), all in one process
- * for this prototype's scale (ARCHITECTURE.md §12 question 1, resolved
- * here: the relay lives inside event-worker, not a separate process —
- * nothing about this system's current load justifies the extra
- * deployable).
+ * consumer groups (feature-update, case-creation, audit, training-examples),
+ * each its own consumer group so one slow/failed consumer never blocks
+ * another, all in one process at this prototype's scale (architecture.md §12).
  *
- * Uses `coldDb`/`coldPool` exclusively — never `hotPool` — matching
- * ADR-004's bulkhead: this process's query load must never compete with
- * `fraud-api`'s hot-path connections.
+ * Uses coldDb/coldPool exclusively, matching ADR-004's bulkhead — this
+ * process's query load must never compete with fraud-api's hot path.
  */
 async function main(): Promise<void> {
   const config = loadConfig();
   const logger = createLogger(config);
 
-  // The tracer provider itself was already started by tracing-preload.js
-  // (`-r`'d before this file ever loads) — see that file and
-  // packages/observability/preload-tracing.js's doc comments for why.
+  // tracing-preload.js already started the tracer provider before this file loaded.
   const tracing = getPreloadedTracingHandle();
   registerDefaultMetrics();
   const metricsServer = startMetricsServer(config.ports.eventWorkerMetrics);
@@ -63,9 +56,8 @@ async function main(): Promise<void> {
   const redis = createRedisClient(config);
 
   const kafka = createKafkaClient(config);
-  // One producer, shared by the relay (publishing real events) and every
-  // consumer below (publishing to their own DLQ on exhausted retries) —
-  // kafkajs producers are safe to reuse across call sites once connected.
+  // Shared by the relay and every consumer's DLQ publish — kafkajs producers
+  // are safe to reuse across call sites once connected.
   const producer = createProducer(kafka);
   await producer.connect();
   const admin = kafka.admin();
@@ -118,13 +110,10 @@ async function main(): Promise<void> {
       consumer: featureUpdateConsumer,
       producer,
       topics: ['transaction.decided'],
-      maxAttempts: 3, // kafka-topics.md: transaction.decided's per-consumer-group retry budget
+      maxAttempts: 3, // kafka-topics.md's retry budget for transaction.decided
       logger,
-      // `headers['traceparent']` is the ORIGINAL request's trace — set by
-      // the relay from `outbox_events.trace_context` (migration 0003).
-      // Extracting it here, before starting this handler's own span,
-      // is what keeps feature-update processing part of the SAME trace
-      // the original HTTP request started, not a disconnected new one.
+      // Extracting headers['traceparent'] here keeps this processing part of
+      // the original request's trace, not a disconnected new one.
       handler: (payload, _key, _topic, headers) =>
         runWithExtractedContext(headers['traceparent'], () =>
           withSpan(
@@ -172,7 +161,7 @@ async function main(): Promise<void> {
         'review.completed',
         'model.updated',
       ],
-      maxAttempts: 5, // kafka-topics.md: audit's retry budget is higher than other topics' — "an audit write failing is more consequential than a feature update failing"
+      maxAttempts: 5, // higher than other topics' — an audit write failing is more consequential
       logger,
       handler: (payload, _key, topic, headers) =>
         runWithExtractedContext(headers['traceparent'], () =>

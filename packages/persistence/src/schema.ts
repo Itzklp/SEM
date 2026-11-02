@@ -25,12 +25,11 @@ import {
  * when either changes — full rationale for every column and index:
  * docs/architecture/data-model.md.
  *
- * Phase 3: `transactions`, `decisions`. Phase 6: `outbox_events`,
- * `fraud_cases`, `audit_events`. `risk_policies` (FR-006's persisted
- * policy history) and `model_versions` (FR-012, Phase 10) remain
- * deferred — FR-006 is satisfied today by Phase 5's in-memory
- * `PolicyStore`, a deliberately simpler choice than a DB-backed table
- * (documented there); `model_versions` has no real model to register yet.
+ * `risk_policies` isn't defined here: FR-006 is satisfied by the in-memory
+ * `PolicyStore` instead, a deliberately simpler choice (documented there).
+ * `model_versions` is defined via raw SQL in the model registry repository,
+ * not here, since it's queried through `db.execute(sql...)` rather than
+ * drizzle's typed builder.
  */
 
 /** No first-class `inet` builder in drizzle's pg-core — a thin custom type gets the real Postgres column type from data-model.md's rationale (range/subnet queries) without pulling in a heavier dependency. */

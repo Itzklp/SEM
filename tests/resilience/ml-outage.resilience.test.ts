@@ -17,55 +17,17 @@ import {
 } from './ml-service-process';
 
 /**
- * RT-ML-001 (ADR-005's policy table, row "ML provider"; deferred from
- * Phase 8 — `tests/resilience/overload-shedding.resilience.test.ts`'s own
- * doc comment explains why: no `MLScoringProvider` existed yet). Phase 10
- * built it (`apps/fraud-api/src/scoring/ml-scoring.provider.ts`); this is
- * that deferred test, against the REAL process now that it exists.
+ * RT-ML-001 (ADR-005's policy table, row "ML provider"): drives a real
+ * `uvicorn` ml-service child process (own test port, not the dev's 8000)
+ * through outage and recovery — no mocked HTTP call.
  *
- * `ml-service` is a host-run Python process, not a container — this test
- * spawns and kills a real `uvicorn` child process on its own test port
- * (never the developer's own `pnpm ml:serve` on 8000), rather than
- * mocking the HTTP call. The circuit breaker's threshold/reset are
- * overridden to small numbers purely so this test finishes in seconds,
- * not because the mechanism being tested is different at the real
- * defaults (`ML_CIRCUIT_BREAKER_THRESHOLD=5`,
- * `ML_CIRCUIT_BREAKER_RESET_MS=10000`).
- *
- * CAUGHT LIVE, verifying this manually before writing the test: the FIRST
- * request from `fraud-api` to a freshly-started `ml-service` genuinely
- * failed the default 30ms `ML_TIMEOUT_MS` budget — not because the model
- * is slow (in-process inference measures ~1-2ms,
- * `docs/testing/test-results/phase10-ml-evaluation.md`), but because
- * establishing the FIRST HTTP connection between the two processes has its
- * own one-time cost that this budget does not accommodate. The correct,
- * observed behaviour is a transparent fallback with `ML_UNAVAILABLE` on
- * that one request — ADR-005's cautious design working as intended, not a
- * bug — but it would make THIS test (which cares about the
- * outage/recovery path, not that one cold-start millisecond) flaky. Using
- * a more generous `ML_TIMEOUT_MS=500` here is a deliberate, documented
- * test-only relaxation; the real 30ms hot-path budget is unchanged in
- * every other environment.
- *
- * CAUGHT A SECOND TIME, writing this test: `apps/fraud-api/src/common/
- * config.provider.ts` is `useValue: loadConfig()` — read once, when that
- * module is first evaluated, "Fail Fast" by design (matches `main.ts`'s
- * real bootstrap: config does not change after process start). A static
- * top-level `import { AppModule } from '...'` in this file is hoisted
- * ahead of this describe block's own code, so it would evaluate
- * `config.provider.ts` — and therefore read `process.env.ML_SERVICE_URL`
- * — BEFORE `beforeAll` ever sets this test's override. The result:
- * every request silently used whatever `ml-service` this test's OWN
- * `.env` already pointed at (a real `pnpm ml:serve` on port 8000,
- * running the whole time from manual verification), never this test's
- * port-8099 instance at all — so "killing" the test's own process never
- * affected what `fraud-api` was actually calling, and the outage
- * assertions failed while looking, misleadingly, like the circuit
- * breaker itself was broken. Fixed by requiring `AppModule` and its
- * fraud-api-local siblings with `require()` INSIDE `beforeAll`, after the
- * env overrides are set — the same "read order relative to module
- * evaluation" class of bug this project has hit before (dotenv/tracing
- * preloads, Phase 3/7).
+ * Two things worth knowing if this test ever looks broken:
+ * - The first request after ml-service starts pays a one-time connection
+ *   cost that can exceed the real 30ms ML_TIMEOUT_MS budget, so this test
+ *   uses a relaxed 500ms timeout — the real hot-path budget elsewhere is untouched.
+ * - `config.provider.ts` reads env once at module load, so AppModule and its
+ *   siblings must be `require()`-d inside `beforeAll`, after the env overrides
+ *   below are set, not imported statically at the top of this file.
  */
 describe('resilience: ML provider outage falls back to rules, and recovers', () => {
   assertTrainedModelExists();
@@ -113,9 +75,6 @@ describe('resilience: ML provider outage falls back to rules, and recovers', () 
     const ready = await waitForReady(ML_TEST_PORT, 30_000);
     if (!ready) throw new Error('ml-service test instance did not become ready in time');
 
-    // Required here, not statically at the top of the file — see this
-    // file's own doc comment on why that ordering matters for a provider
-    // that is `useValue: loadConfig()`.
     /* eslint-disable @typescript-eslint/no-require-imports */
     const { AppModule } = require('../../apps/fraud-api/src/app.module');
     const {
@@ -198,8 +157,7 @@ describe('resilience: ML provider outage falls back to rules, and recovers', () 
   }
 
   it('scores via the real model while ml-service is up, falls back while it is down, trips the breaker, and recovers once it is back', async () => {
-    // --- Warm-up: the first request pays the one-time connection cost
-    // this file's own doc comment explains; not asserted on. ---------
+    // Warm-up: absorbs the one-time connection cost, not asserted on.
     await inject(buildRequest(freshId()));
 
     // --- Baseline: ml-service healthy — the real model is used. ------

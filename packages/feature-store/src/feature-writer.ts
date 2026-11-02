@@ -14,33 +14,19 @@ import {
 } from './keys';
 
 /**
- * FR-002's write side — the logic an `event-worker` "feature-update"
- * consumer runs for every `transaction.decided` event
- * (docs/architecture/kafka-topics.md). Phase 6 owns the actual Kafka
- * consumer and the outbox that feeds it; this function is that
- * consumer's entire body, built and proven now so Phase 6's job is
- * "call this from a Kafka handler", not "design this". It is also,
- * unmodified, the replay mechanism (docs/adr/ADR-002-redis-feature-store.md's
- * "that rebuild path must actually be implemented and tested"): replaying
- * a transaction's original (transaction, decision) pair through this same
- * function, in original order, is what "rebuild from replay" means here —
- * there is no separate replay code path that could drift from the live
- * one. See `feature-reader.test.ts`'s rebuild-from-replay test.
+ * FR-002's write side — what event-worker's feature-update consumer runs
+ * for every transaction.decided event. Also the replay/rebuild mechanism
+ * (ADR-002): replaying a transaction's original (transaction, decision)
+ * pair through this same function, in order, is what "rebuild from
+ * replay" means — there is no separate replay path to drift from the live one.
  *
- * ASSUMED: `failed_transactions_10m` counts transactions this system
- * BLOCKed, not a payment-gateway decline — FraudGuard has no concept of a
- * card-issuer decline, only a fraud decision. Recorded as an explicit
- * assumption rather than a silent guess.
+ * Two assumptions worth stating: failed_transactions_10m counts this
+ * system's own BLOCK decisions, not a payment-gateway decline (no such
+ * concept exists here); ipAddress stands in for "location" since there's
+ * no geo-IP lookup in scope.
  *
- * ASSUMED: `ipAddress` stands in for "location" (`distinct_locations_24h`)
- * — there is no geo-IP lookup in this system's scope, so "a distinct IP"
- * is the closest available proxy for "a distinct location".
- *
- * Idempotent by construction, which is what makes this safe to call twice
- * for the same event (at-least-once delivery, FR-017-adjacent): every
- * write is a `ZADD`/`HSET` keyed by `transactionId` (re-applying the same
- * member updates it in place rather than duplicating it) or a `SETNX`
- * (a no-op once set). A duplicate delivery changes nothing.
+ * Idempotent by construction — every write is a ZADD/HSET keyed by
+ * transactionId or a SETNX, so a duplicate delivery changes nothing.
  */
 export async function recordTransactionFeatures(
   redis: Redis,

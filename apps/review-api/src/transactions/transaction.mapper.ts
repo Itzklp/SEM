@@ -1,7 +1,7 @@
 import type { ScoreResponse, TransactionDetail } from '@fraudguard/contracts';
 import type { DecisionRow, TransactionRow } from '@fraudguard/persistence';
 
-/** FR-008/FR-014's "full recoverable basis" response. `findByTransactionId` (packages/persistence) only ever returns a decision alongside its transaction — `insertScored` writes both atomically, or neither — so `decision` is never actually absent here, even though the wire schema allows `null` for a transaction that theoretically never finished scoring. */
+/** FR-008/FR-014's full recoverable-basis response. decision is never actually absent here since insertScored writes transaction + decision atomically, though the wire schema allows null. */
 export function toTransactionDetailDto(row: {
   transaction: TransactionRow;
   decision: DecisionRow;
@@ -32,9 +32,6 @@ export function toTransactionDetailDto(row: {
     timestamp: transaction.receivedAt.toISOString(),
     status: transaction.status as TransactionDetail['status'],
     decision: decisionDto,
-    // Feature vector as it stood at scoring time — dashboard investigation
-    // screen, Brief §31. Phase 7+'s concern, not Phase 6's; honestly null
-    // rather than faked.
-    featureSummary: null,
+    featureSummary: null, // not yet populated; honestly null rather than faked
   };
 }

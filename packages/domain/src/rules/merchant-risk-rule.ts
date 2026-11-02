@@ -9,7 +9,7 @@ import type { MerchantRiskThresholds } from './rule-thresholds';
  * meets or exceeds the configured threshold. Phase 4 built the read
  * mechanism and its default-on-miss (0 — neutral, not suspicious);
  * seeding real merchant risk scores is Phase 5's named deliverable
- * (`docs/TEAM_TASK_BREAKDOWN.md`) via `setMerchantRiskScore`.
+ * (`docs/team-task-breakdown.md`) via `setMerchantRiskScore`.
  *
  * Severity tracks the score itself directly (it is already normalised to
  * [0, 1] by definition — unlike the other rules, there is no "ratio past

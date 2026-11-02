@@ -23,16 +23,8 @@ export class ModelsController {
 
   @Get()
   async list(): Promise<ModelVersionDto[]> {
-    // `ModelRegistryRepository.list()` runs a raw `db.execute(sql...)` —
-    // unlike drizzle's typed query builder, that path returns Postgres's
-    // own `timestamptz` text representation (e.g. "2026-11-02 00:00:00+00")
-    // as a plain string, never a parsed `Date`. CAUGHT LIVE: the original
-    // `instanceof Date` check never once took its true branch, so every
-    // `GET` 500'd on `modelVersionSchema`'s strict ISO-8601
-    // `.datetime({ offset: true })` check, which that raw text format
-    // does not satisfy (space separator, two-digit offset). `Date`'s own
-    // constructor parses Postgres's format fine; re-serialising through
-    // it is what actually produces a valid ISO string either way.
+    // repository.list() runs a raw query, so registeredAt comes back as Postgres's
+    // timestamptz text, not a Date — re-parse it before the strict ISO-8601 schema check.
     return (await this.repository.list()).map((entry) =>
       modelVersionSchema.parse({
         ...entry,

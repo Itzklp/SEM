@@ -4,7 +4,7 @@ import type { FraudScoringProvider, ScoringInput, ScoringResult } from './fraud-
 
 /**
  * FR-004's simplest real provider — "fully deterministic", per
- * docs/ROADMAP.md, and deliberately NOT the rule engine: it reads only
+ * docs/roadmap.md, and deliberately NOT the rule engine: it reads only
  * the transaction itself, not the feature vector, so it produces a score
  * even when Redis is fully down (ADR-005's all-defaults feature vector
  * changes nothing about this provider's output — a property worth having

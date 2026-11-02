@@ -30,14 +30,9 @@ export type TransactionReceivedEvent = z.infer<typeof transactionReceivedEvent>;
  * Producer: fraud-api (via outbox relay)
  * Consumers: audit, feature-update, case-creation (when decision=REVIEW), analytics
  *
- * Carries the full transaction detail (`merchantId`, `deviceId`, `amount`,
- * `ipAddress`, `timestamp`), not just the decision — Phase 6's
- * feature-update consumer (`recordTransactionFeatures`,
- * `packages/feature-store`) needs both the transaction AND its decision
- * in one place, and `transaction.received` alone does not carry the
- * decision. A deliberately "fat" event rather than making every consumer
- * correlate two separate topics by `transactionId` to reconstruct one
- * logical fact.
+ * Carries the full transaction detail, not just the decision — the
+ * feature-update consumer needs both in one place. A deliberately "fat"
+ * event rather than making consumers correlate two topics.
  */
 export const transactionDecidedEvent = defineEvent(
   'transaction.decided',

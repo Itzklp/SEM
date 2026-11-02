@@ -3,7 +3,7 @@ import RedisMock from 'ioredis-mock';
 
 /**
  * The "in-memory feature store for unit tests" deliverable (Phase 4,
- * docs/ROADMAP.md) — realised as a shared helper rather than a hand-rolled
+ * docs/roadmap.md) — realised as a shared helper rather than a hand-rolled
  * fake, so `packages/feature-store` and every later package that needs a
  * Redis double (Phase 5's rule engine, most likely) use the same one.
  *

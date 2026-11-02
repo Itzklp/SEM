@@ -28,7 +28,7 @@ import { PERSISTENCE_CONTEXT } from '../../apps/fraud-api/src/common/persistence
 import { REDIS_CLIENT } from '../../apps/fraud-api/src/common/redis.provider';
 
 /**
- * Phase 7's exit criteria (docs/ROADMAP.md): metrics carry real values
+ * Phase 7's exit criteria (docs/roadmap.md): metrics carry real values
  * produced by real traffic (IT-OBS-001 below feeds `golden-signals.json`
  * / `hot-path.json` exactly the series they query), and a single
  * transaction is traceable end to end by traceId (IT-TRACE-001) — proved

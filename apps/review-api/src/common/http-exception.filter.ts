@@ -14,7 +14,7 @@ interface ErrorBody {
   details?: { field: string; message: string }[];
 }
 
-/** Identical to fraud-api's — see jwt-auth.guard.ts's doc comment on why this is duplicated, not shared. Produces the same `errorResponseSchema` wire shape from every error. */
+/** Mirrors fraud-api's filter (duplicated rather than shared, see jwt-auth.guard.ts) — same errorResponseSchema wire shape from every error. */
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   constructor(private readonly logger: Logger) {}
@@ -41,16 +41,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
       return;
     }
 
-    // Kept in sync with fraud-api's copy — see this file's own doc
-    // comment on why duplicated, not shared. fraud-api's Phase 11
-    // security review found a Fastify-level error (anything with a
-    // `.statusCode`, e.g. `@fastify/rate-limit`'s own thrown `Error`)
-    // falling into the generic branch below and surfacing as a `500`
-    // instead of its real status. review-api does not register
-    // `@fastify/rate-limit` today, but this filter is `@Catch()`-all —
-    // any future Fastify-level error (a malformed body Fastify itself
-    // rejects before Nest's pipes run, for one) deserves the same honest
-    // handling, not a silent 500.
+    // Kept in sync with fraud-api's copy: any Fastify-level error with a
+    // numeric .statusCode gets its real status, not a silent 500.
     if (
       exception instanceof Error &&
       'statusCode' in exception &&

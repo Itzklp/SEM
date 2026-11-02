@@ -1,16 +1,12 @@
 /**
- * FR-003: "Rules are declared as data/config, not embedded in
- * controllers." Every threshold a rule compares against arrives through
- * one of these plain data shapes, constructed by the caller (`fraud-api`'s
- * composition root) from `AppConfig` — never hardcoded inside a rule.
- * Changing a number here never requires touching `rule-engine.ts` or any
- * other rule (UT-RULE-031).
+ * FR-003: rules are declared as data/config, not embedded in controllers.
+ * Every threshold a rule compares against arrives through one of these
+ * plain data shapes, built from AppConfig — never hardcoded inside a
+ * rule, so changing a number never touches rule-engine.ts (UT-RULE-031).
  *
- * Every default below is an explicit, documented ASSUMPTION, not a
- * measured or researched fraud-industry figure — there is no labelled
- * fraud dataset in this project's scope (that is Phase 10's, and even
- * there, FR-018's synthetic generator, not real history). Phase 9/11 is
- * where these get revisited against actual demo/load behaviour.
+ * Every default below is an explicit, documented assumption, not a
+ * measured fraud-industry figure — there's no labelled fraud dataset in
+ * this project's scope (FR-018's synthetic generator, not real history).
  */
 
 export interface VelocityThresholds {

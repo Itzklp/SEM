@@ -29,7 +29,7 @@ import {
 const isKafkaHealthy = (): boolean => isServiceHealthy('kafka');
 
 /**
- * Phase 6 exit criterion, verbatim (docs/ROADMAP.md): "Kafka stopped for
+ * Phase 6 exit criterion, verbatim (docs/roadmap.md): "Kafka stopped for
  * the duration of a load run: authorizations unaffected, outbox drains
  * fully on recovery." Genuinely stops the real `kafka` container — not a
  * mock, not a simulated error — because ADR-001's entire claim is that

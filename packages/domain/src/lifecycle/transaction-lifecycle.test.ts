@@ -4,7 +4,7 @@ import { IllegalTransitionError } from '../errors';
 import { canTransition, isTerminal, transitionTransaction } from './transaction-lifecycle';
 
 describe('transaction lifecycle', () => {
-  // What: every legal edge in ARCHITECTURE.md §9 is actually permitted.
+  // What: every legal edge in architecture.md §9 is actually permitted.
   // Why: this table IS the lifecycle contract — if it drifts from the
   //      architecture diagram, the diagram is lying.
   // Catches: a typo or accidental edge removal when the graph is edited.

@@ -1,14 +1,7 @@
-// .env is loaded by preload.js (`-r ./preload.js`, see package.json's dev/
-// start scripts) — BEFORE this file's own imports run. It has to happen
-// there, not here: TypeScript's CommonJS output hoists every `import`
-// below (including the AppModule chain, which calls loadConfig() at
-// module-load time) above any statement written later in this file,
-// regardless of source order. `./tracing-preload.js` (also `-r`'d, right
-// after `./preload.js`) is the SAME fix applied to OpenTelemetry's HTTP
-// instrumentation — see that file's doc comment for the real bug this
-// caught: `registerHttpMetrics`/`registerMetricsEndpoint` were never the
-// actual cause of what that file fixes, `startTracing()` being called
-// from inside `bootstrap()` (i.e. here, too late) was.
+// .env and tracing are loaded via `-r` preloads (package.json's dev/start
+// scripts), before this file's imports run — TypeScript's CommonJS output
+// hoists them above anything written later here, so setup from inside
+// bootstrap() would run too late.
 import 'reflect-metadata';
 
 import rateLimit from '@fastify/rate-limit';
@@ -36,9 +29,8 @@ async function bootstrap(): Promise<void> {
   const config = loadConfig();
   const bootstrapLogger = pino({ level: config.logging.level, base: { service: 'fraud-api' } });
 
-  // The tracer provider itself was already started by tracing-preload.js,
-  // before Fastify (and therefore `http`) was ever required — this just
-  // retrieves the shutdown/forceFlush handle. FR-013/NFR-010/NFR-011, Phase 7.
+  // tracing-preload.js already started the tracer provider; this just gets
+  // the shutdown/forceFlush handle back. FR-013/NFR-010/NFR-011.
   const tracing = getPreloadedTracingHandle();
   registerDefaultMetrics();
 
@@ -46,19 +38,12 @@ async function bootstrap(): Promise<void> {
     AppModule,
     new FastifyAdapter({ trustProxy: true }),
     {
-      // Nest's own logger is disabled in favour of the Pino instance the
-      // rest of the app uses (packages/observability tech choice) — one
-      // structured JSON log format, not two.
-      logger: false,
+      logger: false, // Pino handles logging for the rest of the app; no need for a second format
     },
   );
 
-  // ADR-005's "Rate limiting" row: a per-client token bucket, keyed by
-  // IP by default — bounds how FAST one client can call this API.
-  // `registerLoadShedding` below is the DIFFERENT row ("Overload" — a
-  // concurrency CEILING, independent of which client or how spread out
-  // in time requests arrived); both are real, distinct mechanisms, not
-  // one covering the other.
+  // ADR-005 rate limiting: per-client token bucket, keyed by IP — distinct
+  // from registerLoadShedding's concurrency ceiling below.
   await app.register(rateLimit, {
     max: config.security.rateLimit.maxRequests,
     timeWindow: config.security.rateLimit.windowMs,
@@ -67,26 +52,16 @@ async function bootstrap(): Promise<void> {
   app.useGlobalFilters(new HttpExceptionFilter(bootstrapLogger));
   app.enableCors({ origin: false }); // no browser client exists yet; explicit opt-in later rather than an open default
 
-  // Added directly on the underlying Fastify instance, not via
-  // `app.register()` — see `registerHttpMetrics`'s doc comment for why
-  // (Nest's own routes would otherwise fall outside these hooks'
-  // encapsulation scope). `/metrics` is deliberately outside Nest's
-  // module graph too — no auth guard, no rate limit — since the caller
-  // is Prometheus, not an authenticated client (metrics-route.ts's doc
-  // comment on why that's scoped to this local/Docker-internal setup).
+  // Registered on the raw Fastify instance, not via app.register(), so these
+  // hooks apply outside Nest's own route encapsulation. /metrics has no
+  // auth/rate-limit — the caller is Prometheus, not an authenticated client.
   const fastify = app.getHttpAdapter().getInstance();
   if (config.observability.metricsEnabled) {
     registerHttpMetrics(fastify, 'fraud-api');
     registerMetricsEndpoint(fastify, config.observability.metricsPath);
   }
-  // Registered AFTER registerHttpMetrics, deliberately: a SHED (429)
-  // request still passes through the metrics hooks first (so it shows
-  // up in request_duration_seconds/request_errors_total — you want to
-  // SEE shedding happening on a dashboard), then gets short-circuited
-  // here before ever reaching a route handler. ADR-005's "Overload" row,
-  // wired for real — MAX_CONCURRENT_REQUESTS existed as config since
-  // Phase 1 with nothing ever reading it until Phase 8's resilience
-  // suite went looking for what actually enforced it.
+  // After registerHttpMetrics so a shed (429) request still shows up in the
+  // request metrics before being short-circuited. ADR-005's overload row.
   registerLoadShedding(fastify, config.security.maxConcurrentRequests);
 
   await registerSwagger(app, bootstrapLogger);

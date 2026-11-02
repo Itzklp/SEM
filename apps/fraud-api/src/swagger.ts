@@ -9,16 +9,10 @@ import type { OpenAPIV3 } from 'openapi-types';
 import type { Logger } from 'pino';
 
 /**
- * Serves the hand-authored `docs/architecture/api/openapi.yaml` directly
- * as Swagger UI, rather than generating a spec from controller decorators.
- * Keeps exactly one source of truth for the API contract (Phase 1's design
- * document) instead of two that can drift — the DTOs it describes are Zod
- * schemas (packages/contracts), which NestJS's decorator-based Swagger
- * generation cannot introspect anyway.
- *
- * Best-effort: a missing spec file (e.g. a container image that didn't
- * copy /docs) logs a warning and skips Swagger UI rather than failing
- * startup — API documentation is not a hot-path dependency.
+ * Serves the hand-authored docs/architecture/api/openapi.yaml directly as
+ * Swagger UI, rather than generating one from controller decorators — keeps
+ * one source of truth instead of two that can drift. Best-effort: a missing
+ * spec file logs a warning and skips Swagger UI rather than failing startup.
  */
 export async function registerSwagger(app: NestFastifyApplication, logger: Logger): Promise<void> {
   const specPath = join(process.cwd(), '..', '..', 'docs', 'architecture', 'api', 'openapi.yaml');

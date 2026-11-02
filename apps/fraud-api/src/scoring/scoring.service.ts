@@ -43,21 +43,13 @@ import { REDIS_CLIENT } from '../common/redis.provider';
 import { buildOutboxEvents } from './build-outbox-events';
 import { createScoringProvider } from './scoring-provider.factory';
 
-/**
- * FR-017: how long a duplicate `transactionId` still returns the original
- * decision via the Redis fast path. Chosen generously (24h) against
- * Redis's `maxmemory 200mb` (ADR-002) — a realistic retry/replay window
- * without growing the keyspace unboundedly; revisit with measurement if
- * Phase 9 load testing shows keyspace pressure.
- */
+/** FR-017: duplicate transactionId TTL for the Redis idempotency fast path. */
 const IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60;
 
 /**
- * Orchestrates the full hot-path pipeline (ARCHITECTURE.md §7): idempotency
- * → feature load → score → decide → persist → respond. This is where the
- * transaction lifecycle state machine (packages/domain) is actually driven
- * — every transition is asserted, so an ordering bug here throws
- * immediately rather than silently producing an inconsistent transaction.
+ * Hot-path pipeline (architecture.md §7): idempotency check, feature load,
+ * score, decide, persist, respond. Drives the transaction lifecycle state
+ * machine (packages/domain) — every transition is asserted.
  */
 @Injectable()
 export class ScoringService {
@@ -107,21 +99,14 @@ export class ScoringService {
       paymentMethod: request.paymentMethod,
       timestamp: new Date(request.timestamp),
     });
-    // transitionTransaction() both validates the edge is legal (throws if
-    // not) AND returns the new status — the return value has to be
-    // captured and carried forward, or the persisted transaction stays
-    // stuck at its original status forever. (Caught live: every row in
-    // `transactions` had status='RECEIVED' regardless of how far the
-    // pipeline actually got, because this assignment was originally missing.)
+    // transitionTransaction() returns the new status — must be captured and
+    // carried forward, or the persisted row stays stuck at its original status.
     let status = transitionTransaction(transaction.status, 'VALIDATED');
 
     // --- VALIDATED -> FEATURES_LOADED ---------------------------------------
-    // Real behavioural features (Phase 4, FR-002, ADR-002). The write side
-    // (`recordTransactionFeatures`) deliberately does NOT run here — per
-    // ARCHITECTURE.md's service-responsibility table, feature *writes* are
-    // the cold path's job (Phase 6's event-worker, consuming
-    // `transaction.decided`), so that a slow aggregation write can never
-    // slow an authorization. Only the read happens on the hot path.
+    // Only the read happens here (FR-002, ADR-002) — feature writes are the
+    // cold path's job (event-worker), so a slow aggregation write never
+    // slows an authorization.
     const features = await measure(
       {
         span: 'score.feature_fetch',
@@ -145,23 +130,17 @@ export class ScoringService {
     status = transitionTransaction(status, 'SCORED');
 
     // --- SCORED -> DECIDED ---------------------------------------------------
-    // Read fresh on every request, not cached — FR-006: a policy change
-    // via the admin endpoint (admin/policy.controller.ts) takes effect on
-    // the very next request, with no restart (PolicyStore's doc comment).
+    // Read fresh on every request (FR-006): a policy change via the admin
+    // endpoint takes effect on the next request, no restart needed.
     const policy = this.policyStore.get();
-    // `decide()`/`buildReasons()` are synchronous and in-memory — no
-    // `await` inside, so this is `() => Promise.resolve(...)` rather than
-    // an `async` arrow (`@typescript-eslint/require-await`). Still timed
-    // via `measure()` like every other stage: cheap today is not a
-    // guarantee it stays cheap, and ADR-003 asks for every stage's timing.
+    // decide()/buildReasons() are sync, but still timed via measure() —
+    // ADR-003 asks for every stage's timing regardless of cost today.
     const { decision, reasons } = await measure(
       { span: 'score.decide', histogram: fraudScoreDurationSeconds, labels: { stage: 'decide' } },
       () => {
         const decidedValue = decide(scoringResult.score, policy, degraded);
-        // FR-007's floor: every non-ALLOW decision carries at least one
-        // reason, even if zero rules triggered (the model or behavioural
-        // signal alone can push the score past a threshold) — enforced
-        // once, here, rather than trusted to every provider individually.
+        // FR-007: every non-ALLOW decision carries at least one reason,
+        // enforced once here rather than trusted to each provider.
         return Promise.resolve({
           decision: decidedValue,
           reasons: buildReasons(scoringResult.riskFactors, decidedValue),
@@ -187,13 +166,9 @@ export class ScoringService {
     };
     fraudDecisionsTotal.inc({ decision, degraded: String(degraded) });
 
-    // --- Persist (ADR-006: decision write, one transaction) -----------------
-    // The outbox rows are written atomically with the decision itself —
-    // either the decision, both domain rows AND the outbox rows all
-    // exist, or none of them do. apps/event-worker's relay (Phase 6)
-    // picks these up after the response has already been returned;
-    // nothing here talks to Kafka (ADR-001 — enforced by the hot-path
-    // architecture test's import scan).
+    // --- Persist (ADR-006: decision + outbox rows, one transaction) ---------
+    // event-worker's relay picks these up later; nothing here talks to Kafka
+    // directly (ADR-001, enforced by the hot-path architecture test).
     const outboxEventInputs = buildOutboxEvents(decidedTransaction, fraudDecision, features);
     const persisted = await this.persistOrFailClosed(
       decidedTransaction,
@@ -202,9 +177,7 @@ export class ScoringService {
       request.transactionId,
     );
     if (persisted.wasExisting) {
-      // Redis missed it (down, or a race), but the database's unique
-      // constraint caught the duplicate — FR-017 still holds via the
-      // backstop described in TransactionRepository.
+      // Redis missed it, but the DB's unique constraint caught the duplicate.
       this.logger.warn(
         { transactionId: request.transactionId },
         'Idempotency backstop: DB-level duplicate caught after Redis fast path missed it',
@@ -236,15 +209,10 @@ export class ScoringService {
   }
 
   /**
-   * ADR-005's PostgreSQL fail-closed policy, made explicit here — unlike
-   * the Redis/feature-fetch fallback above, this one does NOT swallow the
-   * failure and carry on: "we cannot durably record this decision" is
-   * exactly the one case this system must refuse to paper over (an
-   * unrecorded decision is unauditable). `isPgConnectivityError()`
-   * distinguishes "Postgres is unreachable" from "this insert has a real
-   * bug" — only the former becomes a `503`; the latter must keep
-   * surfacing as a `500`, or a genuine defect starts looking like planned
-   * degradation the moment it ships.
+   * ADR-005's PostgreSQL fail-closed policy: unlike the Redis fallback
+   * above, this does not swallow the failure — an unrecorded decision is
+   * unauditable. isPgConnectivityError() distinguishes "Postgres is
+   * unreachable" (503) from "this insert has a real bug" (500).
    */
   private async persistOrFailClosed(
     transaction: Transaction,
@@ -276,7 +244,7 @@ export class ScoringService {
     }
   }
 
-  /** ADR-005's Redis cautious-open fallback, made explicitly here (not inside `@fraudguard/feature-store`, which throws on failure by design — see `getFeatureVector`'s doc comment). A degraded vector is indistinguishable, to every downstream consumer, from Phase 3's "no real features yet" placeholder — same shape, same handling, different cause. */
+  /** ADR-005's Redis cautious-open fallback — getFeatureVector() throws by design, so the catch lives here. */
   private async tryGetFeatureVector(transaction: Transaction): Promise<FeatureVector> {
     try {
       return await getFeatureVector(this.redis, {

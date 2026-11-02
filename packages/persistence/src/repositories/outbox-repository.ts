@@ -4,7 +4,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { outboxEvents, type OutboxEventRow } from '../schema';
 
-/** What `TransactionRepository.insertScored` (and any future producer) writes, alongside its domain row, in the SAME transaction (ADR-006). */
+/** What insertScored writes alongside its domain row, in the same transaction (ADR-006). */
 export interface OutboxEventInput {
   readonly eventId: string;
   readonly aggregateId: string;
@@ -12,7 +12,7 @@ export interface OutboxEventInput {
   readonly topic: string;
   readonly partitionKey: string;
   readonly payload: unknown;
-  /** Captured via `captureTraceparent()` at the moment this event is built — see migration 0003's note. Optional: a caller with tracing disabled, or one that hasn't adopted it yet, simply omits it. */
+  /** Captured via captureTraceparent() when the event is built; omitted if tracing is disabled. */
   readonly traceContext?: string;
 }
 
@@ -24,31 +24,19 @@ export interface BatchResult {
 }
 
 /**
- * The relay's (`apps/event-worker`) one real operation. Deliberately a
- * single method that takes the Kafka-publishing callback, rather than a
- * "claim" method and a separate "mark published" method called later:
- * `FOR UPDATE SKIP LOCKED`'s row lock is held only for the lifetime of
- * the enclosing transaction (ADR-006) — claiming rows in one transaction
- * and marking them published in a second, later one would release the
- * lock in between, and a second relay instance's next poll could claim
- * the same rows before the first finished publishing them. Keeping
- * "claim, publish, mark" inside one transaction is what actually makes
- * `SKIP LOCKED` safe for concurrent relay instances — a real correctness
- * requirement, not a style preference, caught by reasoning through the
- * failure mode before writing the obviously-simpler two-method version.
+ * The relay's one real operation. Takes the publish callback directly
+ * rather than separate claim/mark-published methods: FOR UPDATE SKIP
+ * LOCKED only holds its row lock for the enclosing transaction, so a
+ * second relay instance could claim the same rows in the gap between two
+ * separate transactions. Claim, publish, and mark must stay in one transaction.
  */
 export class OutboxRepository {
   constructor(private readonly db: NodePgDatabase<Record<string, unknown>>) {}
 
   /**
-   * Timed as ONE operation, `publish` callback included — deliberately,
-   * not an oversight: `publish` runs WHILE this transaction still holds
-   * `FOR UPDATE SKIP LOCKED`'s row locks, so "how long did a Kafka
-   * publish take" and "how long were these rows locked" are the same
-   * question here. A slow broker shows up directly in
-   * `db_duration_seconds{operation="outbox_process_batch"}` — exactly the
-   * signal that matters for this method, even though the number also
-   * includes non-database time.
+   * Timed as one operation including the publish callback — publish runs
+   * while this transaction still holds the row locks, so a slow broker
+   * shows up directly in db_duration_seconds{operation="outbox_process_batch"}.
    */
   async processUnpublishedBatch(
     limit: number,
@@ -81,11 +69,8 @@ export class OutboxRepository {
                 .where(eq(outboxEvents.id, row.id));
               publishedCount += 1;
             } else {
-              // Recorded, not dead-lettered — see this class's doc comment
-              // and the migration file's note: a sustained Kafka outage must
-              // drain fully on recovery (Phase 6 exit criterion), so a
-              // publish failure is always retried on the next poll, never
-              // given up on.
+              // Recorded, not dead-lettered: a publish failure is always
+              // retried on the next poll, so a sustained outage still drains fully.
               await tx
                 .update(outboxEvents)
                 .set({ attempts: sql`${outboxEvents.attempts} + 1`, lastError: outcome.error })
@@ -98,7 +83,7 @@ export class OutboxRepository {
     );
   }
 
-  /** Cold-path health signal (ADR-006: "backlog depth is a directly measurable health signal") — polled by `apps/event-worker`'s `outbox-gauge-poller.ts` into `outbox_pending_total`. */
+  /** Cold-path health signal (ADR-006) — polled into outbox_pending_total. */
   async countUnpublished(): Promise<number> {
     return measure(
       {

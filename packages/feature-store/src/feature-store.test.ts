@@ -18,7 +18,7 @@ import { setIpRiskScore, setMerchantRiskScore } from './risk-lookup';
 /**
  * Runs entirely against `ioredis-mock` (no Docker) — "deterministic
  * feature-computation tests" + "in-memory feature store for unit tests"
- * (docs/ROADMAP.md, Phase 4). The integration suite
+ * (docs/roadmap.md, Phase 4). The integration suite
  * (tests/integration/feature-store.integration.test.ts) re-proves the
  * load-bearing properties — windowing, idempotent replay, defaults under
  * a real Redis outage, the p99 budget — against real Redis, because a
@@ -292,7 +292,7 @@ describe('@fraudguard/feature-store: write + read round trip', () => {
 
   // FR-002's acceptance criterion: "Feature computation is deterministic
   // for a given event sequence." This is the rebuild-from-replay exit
-  // criterion (docs/ROADMAP.md Phase 4) — no Kafka/event-worker exists
+  // criterion (docs/roadmap.md Phase 4) — no Kafka/event-worker exists
   // yet (that is Phase 6's job), so "replay" here means what it will mean
   // once Phase 6 wires a real consumer onto this same function: re-apply
   // the durable, ordered event sequence (Postgres is the durable record —

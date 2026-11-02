@@ -14,7 +14,7 @@ interface ErrorBody {
   details?: { field: string; message: string }[];
 }
 
-/** ADR-005's PostgreSQL fail-closed policy: the `Retry-After` value on every `503`. ASSUMED — short enough a client retrying in a loop doesn't wait long, long enough a container restart (Phase 2's measured ~10-20s) has a real chance of finishing first. Not yet tuned against a measured outage-duration distribution. */
+/** ADR-005 fail-closed `Retry-After` for a 503 — not yet tuned against a measured outage-duration distribution. */
 const SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS = 5;
 
 /**
@@ -40,10 +40,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
       const body = exception.getResponse();
       const errorBody: ErrorBody = typeof body === 'string' ? { message: body } : body;
 
-      // ADR-005: every 503 (today, only ScoringService.persistOrFailClosed's
-      // PostgreSQL fail-closed path) tells the caller how long to wait
-      // before retrying, via the standard header — not a body field, so
-      // `errorResponseSchema`'s `.strict()` shape never needs to know about it.
+      // ADR-005: every 503 tells the caller how long to wait via the standard
+      // header, not a body field, so errorResponseSchema's strict shape stays untouched.
       if (HttpStatus[status] === 'SERVICE_UNAVAILABLE') {
         void response.header('Retry-After', String(SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS));
       }
@@ -59,20 +57,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
       return;
     }
 
-    // CAUGHT LIVE, Phase 11's security review (ST-RATE-001):
-    // `@fastify/rate-limit` signals "over the limit" with a plain `Error`
-    // carrying a `.statusCode = 429` — a Fastify-level convention, not a
-    // NestJS `HttpException` — so it fell straight into the generic branch
-    // below and every rate-limited client saw a `500 INTERNAL_ERROR`
-    // instead of `429` with `Retry-After`. Verified against the real
-    // running process: firing 150 real concurrent requests measured
-    // `X-RateLimit-Remaining` correctly counting down to `0`, but the
-    // response for every request past the limit was `500`, not `429` —
-    // the limiter was genuinely engaging, the client just could never
-    // tell. Any Fastify-level error exposing a numeric `.statusCode` is
-    // handled the same honest way an `HttpException` is, rather than
-    // being swallowed into the single "something unexpected happened"
-    // path meant for errors with no declared status at all.
+    // @fastify/rate-limit throws a plain Error with .statusCode = 429, not an
+    // HttpException (ST-RATE-001) — handle any error exposing a numeric status
+    // the same way, instead of letting it fall into the generic 500 below.
     if (
       exception instanceof Error &&
       'statusCode' in exception &&

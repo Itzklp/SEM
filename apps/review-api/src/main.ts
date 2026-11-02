@@ -1,8 +1,4 @@
-// .env is loaded by preload.js — see apps/fraud-api/src/main.ts's doc
-// comment for why that has to happen outside this file's own import
-// graph; ./tracing-preload.js is the same fix for OpenTelemetry's HTTP
-// instrumentation (packages/observability/preload-tracing.js's doc
-// comment has the real bug this caught).
+// .env/tracing preloads — see apps/fraud-api/src/main.ts's doc comment for why.
 import 'reflect-metadata';
 
 import { loadConfig } from '@fraudguard/config';
@@ -23,18 +19,15 @@ import { HttpExceptionFilter } from './common/http-exception.filter';
 import { CASE_REPOSITORY } from './common/persistence.provider';
 import { registerSwagger } from './swagger';
 
-/** ASSUMED — no measured SLO to tune this against yet; matches the rough cadence `apps/event-worker`'s gauge pollers use. */
+/** No measured SLO yet; matches event-worker's gauge-poller cadence. */
 const QUEUE_DEPTH_POLL_INTERVAL_MS = 5_000;
 
 /**
- * The analyst-facing cold path (ARCHITECTURE.md's bulkhead rationale):
- * heavy, unbounded query load that must never be able to starve
- * `fraud-api`'s hot-path connections — which is why this is a wholly
- * separate deployable with its own Postgres pool (`coldPool`), not a
- * module inside `fraud-api`. No rate limiting here (unlike fraud-api) —
- * ADR-005's overload-shedding policy is specifically about protecting
- * the latency budget of a payment authorization; this app has no such
- * budget to protect.
+ * The analyst-facing cold path (architecture.md's bulkhead rationale): a
+ * separate deployable with its own Postgres pool, so heavy query load here
+ * can never starve fraud-api's hot-path connections. No rate limiting —
+ * ADR-005's overload-shedding protects an authorization's latency budget,
+ * which this app doesn't have.
  */
 async function bootstrap(): Promise<void> {
   const config = loadConfig();
@@ -52,9 +45,8 @@ async function bootstrap(): Promise<void> {
   app.useGlobalFilters(new HttpExceptionFilter(bootstrapLogger));
   app.enableCors({ origin: false });
 
-  // Same reasoning as apps/fraud-api/src/main.ts — directly on the
-  // underlying Fastify instance, unauthenticated, outside Nest's module
-  // graph (Prometheus is the caller, not an authenticated analyst).
+  // Same reasoning as fraud-api's main.ts: unauthenticated, outside Nest's
+  // module graph — Prometheus is the caller, not an authenticated analyst.
   const fastify = app.getHttpAdapter().getInstance();
   if (config.observability.metricsEnabled) {
     registerHttpMetrics(fastify, 'review-api');
@@ -66,10 +58,8 @@ async function bootstrap(): Promise<void> {
   await app.listen(config.ports.reviewApi, '0.0.0.0');
   bootstrapLogger.info({ port: config.ports.reviewApi }, 'review-api listening');
 
-  // `review_queue_depth` (ADR-005: "review-queue depth is a monitored,
-  // alertable signal") — started from here, not Nest DI, since this app
-  // otherwise has no background loop; `app.get()` reaches into the
-  // already-built DI graph for the one repository it needs.
+  // review_queue_depth (ADR-005). Started here rather than via Nest DI since
+  // this app otherwise has no background loop.
   const queueDepthPoller = startQueueDepthPoller({
     caseRepository: app.get<CaseRepository>(CASE_REPOSITORY),
     intervalMs: QUEUE_DEPTH_POLL_INTERVAL_MS,

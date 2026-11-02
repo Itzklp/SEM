@@ -2,18 +2,14 @@ import { mulberry32, pick, randomInt } from './prng';
 
 /**
  * FR-018. Deterministic synthetic transaction generation: the same seed
- * produces byte-identical output, which is what makes performance and
- * detection results reproducible across runs and across teammates.
+ * produces byte-identical output, making performance and detection
+ * results reproducible across runs and teammates.
  *
- * Scope note: this generates well-formed `ScoreRequest`-shaped payloads
- * (the "normal" pattern) with deterministic identifiers and amounts —
- * sufficient for Phase 3's integration tests. The remaining fraud patterns
- * FR-018 names (high-velocity, amount-anomaly, suspicious-device,
- * suspicious-merchant, geographic-anomaly, repeated-failure, coordinated
- * rings) are meaningful once there is a feature store and rule engine to
- * detect them against (Phase 4/5) — building them earlier would mean
- * testing against nothing. Tracked in the traceability matrix as partial
- * coverage, not silently assumed complete.
+ * This generates well-formed `ScoreRequest` payloads (the "normal"
+ * pattern) with deterministic identifiers and amounts. The remaining
+ * fraud patterns FR-018 names need a feature store and rule engine to
+ * detect them against, and are tracked as partial coverage in the
+ * traceability matrix, not silently assumed complete.
  */
 export interface GeneratedTransaction {
   readonly transactionId: string;

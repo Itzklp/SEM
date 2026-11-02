@@ -21,7 +21,7 @@ export interface TracingOptions {
 
 export interface TracingHandle {
   readonly shutdown: () => Promise<void>;
-  /** Forces buffered spans to export immediately rather than waiting for `BatchSpanProcessor`'s scheduled delay — exists for tests that need to assert against a real backend (Jaeger) without an arbitrary sleep. */
+  /** Forces buffered spans to export immediately, instead of waiting for BatchSpanProcessor's scheduled delay — for tests asserting against a real backend without an arbitrary sleep. */
   readonly forceFlush: () => Promise<void>;
 }
 
@@ -30,28 +30,16 @@ const NOOP_HANDLE: TracingHandle = {
   forceFlush: () => Promise.resolve(),
 };
 
-/**
- * Must match `GLOBAL_KEY` in `packages/observability/preload-tracing.js`
- * exactly — see `getPreloadedTracingHandle()`'s doc comment.
- */
+/** Must match GLOBAL_KEY in preload-tracing.js exactly. */
 const GLOBAL_TRACING_KEY = '__fraudguardTracingHandle__';
 
 /**
- * Reads the tracer-provider handle `preload-tracing.js` already built
- * and stashed on `globalThis` — what every real app (`fraud-api`,
- * `review-api`, `event-worker`) calls from `bootstrap()`/`main()` now,
- * instead of `startTracing()` below. `startTracing()` itself still
- * builds a provider correctly; the problem was never its logic, only
- * WHEN it ran relative to Fastify's own `require('http')` — see
- * `preload-tracing.js`'s doc comment for the real bug this fixed
- * (caught against a live running process, not a test: the Nest test
- * harness used by every `*.integration.test.ts` file bypasses `main.ts`
- * entirely, so no automated test could have caught a main.ts-bootstrap-
- * ORDER bug). Returns the no-op handle if the preload never ran — e.g.
- * under Jest, where `startTracing()` (called directly, as
- * `tests/integration/observability.integration.test.ts` does) is still
- * the right tool, since a test file importing this module dynamically at
- * test time has no "first thing the process does" moment to protect.
+ * Reads the tracer-provider handle preload-tracing.js already built and
+ * stashed on globalThis — what every real app's bootstrap()/main() calls
+ * now, instead of startTracing() below (whose issue was never its logic,
+ * only running too late relative to Fastify's own require('http')).
+ * Returns the no-op handle if the preload never ran, e.g. under Jest,
+ * where startTracing() called directly is still the right tool.
  */
 export function getPreloadedTracingHandle(): TracingHandle {
   const stashed = (globalThis as Record<string, unknown>)[GLOBAL_TRACING_KEY];
@@ -59,37 +47,18 @@ export function getPreloadedTracingHandle(): TracingHandle {
 }
 
 /**
- * Starts this process's tracer provider — call once, as early as possible
- * in `bootstrap()` (after `loadConfig()`, before `NestFactory.create()` /
- * before any Kafka client connects), per app. Returns a `shutdown()` to
- * call on SIGTERM/SIGINT so buffered spans flush before the process exits
- * rather than being silently dropped.
+ * Starts this process's tracer provider. No longer what a real app's
+ * main.ts calls (see getPreloadedTracingHandle()) — kept for callers that
+ * construct a provider mid-process, mainly tests.
  *
- * NOT what a real app's `main.ts` calls any more — see
- * `getPreloadedTracingHandle()`'s doc comment. Kept for callers that
- * construct a tracer provider mid-process, after other modules (Fastify
- * included) are already loaded — tests, mainly, where the "before the
- * first `require('http')`" timing this whole preload exists for does not
- * apply the same way.
- *
- * Deliberately registers ONLY `HttpInstrumentation` here, not the
- * `pg`/`ioredis`/`kafkajs` auto-instrumentation packages OpenTelemetry
- * also publishes. Every Redis/Postgres/Kafka call this system makes
- * already passes through one of `@fraudguard/feature-store`,
- * `@fraudguard/persistence` or `@fraudguard/messaging` — three small,
- * already-enumerable sets of call sites — and `measure.ts`'s `measure()`
- * wraps each one with BOTH a span and the matching Prometheus histogram
- * observation, at the exact same point, using the exact same label. Two
- * separate instrumentation mechanisms measuring the same operation
- * (auto-instrumentation's span timing vs. this package's histogram
- * timing) would drift out of agreement the first time either library
- * changes what it considers the operation's start/end; one mechanism
- * producing both numbers cannot drift from itself. `HttpInstrumentation`
- * is kept because it is the one thing this system does NOT otherwise
- * wrap by hand — the inbound request itself, and outbound calls this
- * system does not already instrument (none exist yet, but a future
- * outbound HTTP call — e.g. Phase 10's `ml-service` client — gets a span
- * for free rather than silently going dark).
+ * Registers only HttpInstrumentation, not the pg/ioredis/kafkajs
+ * auto-instrumentation packages OpenTelemetry also publishes: every
+ * Redis/Postgres/Kafka call already passes through measure(), which wraps
+ * it with both a span and the matching Prometheus histogram at the same
+ * point — two separate instrumentation mechanisms for the same operation
+ * would drift from each other the moment either library's notion of
+ * start/end changed. HttpInstrumentation stays because inbound/outbound
+ * HTTP isn't wrapped by hand anywhere else.
  */
 export function startTracing(options: TracingOptions): TracingHandle {
   if (!options.enabled) {
@@ -101,9 +70,6 @@ export function startTracing(options: TracingOptions): TracingHandle {
     root: new TraceIdRatioBasedSampler(options.tracesSamplerArg),
   });
   const exporter = new OTLPTraceExporter({ url: `${options.otlpEndpoint}/v1/traces` });
-  // `spanProcessors` in the constructor, not the deprecated
-  // `addSpanProcessor()` call after construction — same span processor,
-  // just the API the installed SDK version asks for it through now.
   const provider = new NodeTracerProvider({
     resource,
     sampler,

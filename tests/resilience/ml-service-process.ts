@@ -5,7 +5,7 @@ import { join } from 'node:path';
 /**
  * RT-ML-001's equivalent of `docker-helpers.ts` for the containerised
  * dependencies: `ml-service` is a host-run Python process (same pattern as
- * `fraud-api`/`review-api`/`event-worker` — ARCHITECTURE.md's service
+ * `fraud-api`/`review-api`/`event-worker` — architecture.md's service
  * table), not a container, so "stop it" means killing this child process,
  * not `docker compose stop`.
  *

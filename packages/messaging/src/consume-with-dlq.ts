@@ -18,7 +18,7 @@ export interface ConsumeWithDlqOptions {
   readonly logger: Logger;
 }
 
-/** kafkajs decodes header values as `Buffer | string | (Buffer | string)[] | undefined` — normalised to a plain string map (first value if an array, omitted if absent) so callers (e.g. trace-context extraction) never have to think about the wire representation. */
+/** Normalises kafkajs's Buffer|string|array|undefined header values to a plain string map. */
 function decodeHeaders(
   raw: Record<string, Buffer | string | (Buffer | string)[] | undefined>,
 ): Record<string, string> {
@@ -32,12 +32,12 @@ function decodeHeaders(
   return headers;
 }
 
-/** kafka-init's naming convention: every catalogue topic has a matching `<topic>.dlq`. Generic enough to hardcode here (not fraud-specific), unlike `@fraudguard/contracts`' event-shape knowledge, which this package deliberately does not depend on. */
+/** Every catalogue topic has a matching `<topic>.dlq`, per kafka-init's naming convention. */
 function dlqTopicFor(topic: string): string {
   return `${topic}.dlq`;
 }
 
-const BACKOFF_BASE_MS = 200; // ASSUMED — no measured SLO to tune this against yet
+const BACKOFF_BASE_MS = 200; // no measured SLO to tune this against yet
 const BACKOFF_MAX_MS = 5_000;
 
 /** Exponential backoff with full jitter (ADR-005's resilience-pattern table: "cold path only... exponential backoff with full jitter"). */
@@ -51,20 +51,14 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * The retry+DLQ shape named per-topic in `docs/architecture/kafka-topics.md`
- * ("Retry strategy" / "Dead-letter strategy" rows), implemented once here
- * rather than reinvented per consumer. A malformed payload (fails to
- * parse as JSON) goes straight to the DLQ — no number of retries fixes a
- * message that was never valid JSON. A handler that throws (e.g. a
- * transient DB error) gets `maxAttempts` tries with jittered backoff
- * before the message is DLQ'd with its error attached.
+ * The retry+DLQ shape named per-topic in docs/architecture/kafka-topics.md,
+ * implemented once here rather than reinvented per consumer. A malformed
+ * payload goes straight to the DLQ — no retry fixes invalid JSON. A
+ * handler that throws gets maxAttempts tries with jittered backoff first.
  *
- * Retrying inside `eachMessage` — rather than nacking and relying on
- * Kafka redelivery — blocks this one partition for the duration of the
- * retries. Accepted deliberately: ADR-005 permits cold-path retries
- * (unlike the hot path), and a consumer's job is exactly to make
- * eventual progress through its partition, not to shed load the way
- * `fraud-api` does.
+ * Retries run inside eachMessage, blocking this partition for their
+ * duration rather than nacking for Kafka redelivery — accepted per
+ * ADR-005, which permits cold-path retries.
  */
 export async function consumeWithDlq(options: ConsumeWithDlqOptions): Promise<void> {
   await options.consumer.subscribe({ topics: [...options.topics], fromBeginning: false });

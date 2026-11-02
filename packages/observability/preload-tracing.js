@@ -1,25 +1,9 @@
-// Plain JS (NOT compiled from TypeScript), loaded via `-r` BEFORE any
-// other module in each app's dev/start script — see each app's own
-// `tracing-preload.js` and docs/adr/ADR-007-observability-stack.md.
-//
-// Exists as plain JS, not as `startTracing()` in `src/tracing/tracing.ts`
-// (which remains the right tool for tests — it runs fine called directly
-// from within an already-running process), for exactly the reason
-// `apps/fraud-api/preload.js` documents for dotenv: TypeScript's
-// CommonJS output hoists every `import` in `main.ts` above any code
-// written later in that same file, so calling tracing setup from inside
-// `bootstrap()` happens AFTER Fastify/`@nestjs/platform-fastify` (and
-// therefore `http`) have already been required.
-//
-// CAUGHT LIVE, not assumed: a real scored transaction through a real
-// running `fraud-api` (not the Nest test harness, which bypasses
-// `main.ts` entirely and therefore could never have caught this)
-// produced `redis.*`/`db.*`/`score.*` spans in Jaeger — proving the SDK
-// pipeline itself (provider, exporter, Jaeger ingestion) worked — but NO
-// root HTTP span wrapping them, proving `HttpInstrumentation`'s patch
-// never actually took effect for this process's real `http.Server`.
-// Moving the instrumentation registration into a `-r` preload — so it
-// installs before Fastify's own `require('http')` — fixed it.
+// Plain JS, loaded via `-r` before any other module in each app's
+// dev/start script (see each app's own tracing-preload.js and
+// docs/adr/ADR-007-observability-stack.md). Must run before Fastify's own
+// require('http'), or HttpInstrumentation's patch never takes effect —
+// calling tracing setup from inside bootstrap() is too late, since
+// TypeScript's CommonJS output hoists main.ts's imports above it.
 const { NodeTracerProvider } = require('@opentelemetry/sdk-trace-node');
 const {
   BatchSpanProcessor,
@@ -54,15 +38,10 @@ function parseBooleanEnv(value, fallback) {
 }
 
 /**
- * Called once, at the very top of each app's dev/start script, before
- * `tsconfig-paths/register` — see each app's `tracing-preload.js`.
- * Reads OTEL_* directly from `process.env` rather than going through
- * `@fraudguard/config`'s `loadConfig()`: that package is TypeScript
- * source, resolved via `tsconfig-paths`, which has not registered yet at
- * this point in the `-r` chain — the whole reason this file is plain JS.
- * `.env` itself IS already loaded by this point (`preload.js`'s dotenv
- * call precedes this one in every app's script), so `process.env` is
- * complete; only the typed/validated wrapper is unavailable here.
+ * Called once at the top of each app's dev/start script, before
+ * tsconfig-paths/register. Reads OTEL_* straight from process.env rather
+ * than @fraudguard/config's loadConfig(), since that TypeScript module
+ * isn't resolvable yet at this point in the -r chain.
  */
 function start(serviceName) {
   const enabled = parseBooleanEnv(process.env.OTEL_ENABLED, true);

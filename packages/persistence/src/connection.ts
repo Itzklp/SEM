@@ -5,13 +5,11 @@ import { Pool } from 'pg';
 import * as schema from './schema';
 
 /**
- * Two pools, not one — the bulkhead from ADR-004. `hotPool` serves
- * `fraud-api`'s write path (small, bounded, latency-sensitive: the write
- * budget is 7ms per ADR-003). `coldPool` serves `review-api`'s query load
- * (Phase 6+) — larger, slower, unbounded query shapes. Sharing one pool
- * would let one expensive analyst query exhaust the connections an
- * authorization needs (NFR-007), which is exactly the failure this
- * separation exists to prevent.
+ * Two pools, not one — ADR-004's bulkhead. hotPool serves fraud-api's
+ * small, latency-sensitive write path (ADR-003's 7ms budget); coldPool
+ * serves review-api's larger, slower query load. Sharing one pool would
+ * let an expensive analyst query exhaust the connections an authorization
+ * needs (NFR-007).
  */
 export function createPools(config = loadConfig()): { hotPool: Pool; coldPool: Pool } {
   const hotPool = new Pool({
@@ -38,20 +36,11 @@ export function createPools(config = loadConfig()): { hotPool: Pool; coldPool: P
     statement_timeout: 5000,
   });
 
-  // node-postgres's documented gotcha, found live by Phase 8's PostgreSQL
-  // resilience test before it was added here: a `Pool` emits its own
-  // `'error'` event when an IDLE pooled client errors (e.g. the server
-  // going away) — not the same thing as a `.query()` call rejecting. An
-  // EventEmitter's `'error'` event with no listener is fatal in Node
-  // (it rethrows, crashing the process). Without this handler, stopping
-  // Postgres with an idle connection sitting in the pool would crash
-  // `fraud-api` outright — the opposite of ADR-005's "fail closed with a
-  // 503", which requires the PROCESS to stay up to return that 503 at
-  // all. Deliberately a no-op beyond not crashing: there is no in-flight
-  // query to fail here (that error surfaces separately, to whichever
-  // `.query()` call was actually pending, and IS handled there —
-  // `ScoringService.persistOrFailClosed`); the pool itself already
-  // removes the dead client and opens a new one on the next checkout.
+  // A Pool emits its own 'error' when an idle client errors (e.g. the server
+  // going away); an unhandled EventEmitter 'error' is fatal in Node, which
+  // would crash the process instead of letting it fail closed with a 503.
+  // Deliberately a no-op beyond that — any in-flight query's own error is
+  // handled separately where it's awaited.
   hotPool.on('error', () => undefined);
   coldPool.on('error', () => undefined);
 

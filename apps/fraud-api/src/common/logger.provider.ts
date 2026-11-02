@@ -6,7 +6,7 @@ import { APP_CONFIG } from './config.provider';
 
 /**
  * Structured JSON logging (NFR-010) via Pino — chosen for low overhead on
- * the hot path over more feature-rich loggers (ARCHITECTURE.md tech
+ * the hot path over more feature-rich loggers (architecture.md tech
  * table). `LOG_PRETTY` must be false under load: pretty-printing is a
  * synchronous transform on every log line, and that cost is exactly what
  * ADR-003's budget has no room for.

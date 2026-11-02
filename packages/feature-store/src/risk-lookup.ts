@@ -9,7 +9,7 @@ import { ipRiskKey, merchantRiskKey } from './keys';
  *
  * Phase 4 builds this mechanism and its default-on-miss read path
  * (`feature-reader.ts`); seeding real merchant/IP risk reference data is
- * an explicit Phase 5 deliverable (docs/TEAM_TASK_BREAKDOWN.md: "merchant/IP
+ * an explicit Phase 5 deliverable (docs/team-task-breakdown.md: "merchant/IP
  * risk reference data seeding"). Used directly by tests until then.
  */
 export async function setMerchantRiskScore(
