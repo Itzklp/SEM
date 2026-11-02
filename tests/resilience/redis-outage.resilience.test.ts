@@ -96,15 +96,20 @@ describe('resilience: Redis outage widens the REVIEW band (ADR-005 cautious-open
     });
 
     await redis.del(...TRANSACTION_IDS.map((id) => `idem:${id}`));
-    await persistence.hotPool.query(
+    // coldPool, not hotPool, for cleanup — hotPool's 100ms statement_timeout
+    // (ADR-003's hot-path write budget) is real and was genuinely hit by
+    // these DELETEs under Phase 11's own host conditions, the same bug class
+    // Phase 8/9 already fixed in bulkhead-isolation/dependency-latency but
+    // missed applying to this file and its siblings.
+    await persistence.coldPool.query(
       'DELETE FROM outbox_events WHERE aggregate_id = ANY($1::text[])',
       [TRANSACTION_IDS],
     );
-    await persistence.hotPool.query(
+    await persistence.coldPool.query(
       'DELETE FROM decisions WHERE transaction_id = ANY($1::text[])',
       [TRANSACTION_IDS],
     );
-    await persistence.hotPool.query(
+    await persistence.coldPool.query(
       'DELETE FROM transactions WHERE transaction_id = ANY($1::text[])',
       [TRANSACTION_IDS],
     );

@@ -93,13 +93,15 @@ describe('resilience: Kafka outage does not affect fraud-api authorizations', ()
     // bug class as demo-scenarios/policy-admin's identical fix, missed
     // here because this file was written after those, not copied from them.
     await redis.del('idem:kafka_outage_demo');
-    await persistence.hotPool.query('DELETE FROM outbox_events WHERE aggregate_id = $1', [
+    // coldPool for cleanup, not hotPool — see redis-outage.resilience
+    // .test.ts's doc comment on this exact fix (Phase 11).
+    await persistence.coldPool.query('DELETE FROM outbox_events WHERE aggregate_id = $1', [
       'kafka_outage_demo',
     ]);
-    await persistence.hotPool.query('DELETE FROM decisions WHERE transaction_id = $1', [
+    await persistence.coldPool.query('DELETE FROM decisions WHERE transaction_id = $1', [
       'kafka_outage_demo',
     ]);
-    await persistence.hotPool.query('DELETE FROM transactions WHERE transaction_id = $1', [
+    await persistence.coldPool.query('DELETE FROM transactions WHERE transaction_id = $1', [
       'kafka_outage_demo',
     ]);
   }, 120_000);
@@ -152,7 +154,7 @@ describe('resilience: Kafka outage does not affect fraud-api authorizations', ()
 
       // The decision IS durably recorded — ADR-006's whole point — even
       // though nothing has been published anywhere yet.
-      const rows = await persistence.hotPool.query<{ published_at: string | null }>(
+      const rows = await persistence.coldPool.query<{ published_at: string | null }>(
         'SELECT published_at FROM outbox_events WHERE aggregate_id = $1',
         [request.transactionId],
       );
@@ -205,7 +207,7 @@ describe('resilience: Kafka outage does not affect fraud-api authorizations', ()
       } catch {
         // not ready yet — retried below
       }
-      const rows = await persistence.hotPool.query<{ published_at: string | null }>(
+      const rows = await persistence.coldPool.query<{ published_at: string | null }>(
         'SELECT published_at FROM outbox_events WHERE aggregate_id = $1',
         ['kafka_outage_demo'],
       );
@@ -217,7 +219,7 @@ describe('resilience: Kafka outage does not affect fraud-api authorizations', ()
     await producer.disconnect();
 
     expect(drained).toBe(true);
-    const finalRows = await persistence.hotPool.query<{ published_at: string | null }>(
+    const finalRows = await persistence.coldPool.query<{ published_at: string | null }>(
       'SELECT published_at FROM outbox_events WHERE aggregate_id = $1',
       ['kafka_outage_demo'],
     );

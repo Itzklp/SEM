@@ -107,13 +107,13 @@ describe('resilience: slow (not down) Redis still times out fast, falls back, an
     // FK dependency order — outbox_events/decisions before
     // transactions (same bug class `bulkhead-isolation.resilience
     // .test.ts` caught on its own second run).
-    await persistence.hotPool.query('DELETE FROM outbox_events WHERE aggregate_id = $1', [
+    await persistence.coldPool.query('DELETE FROM outbox_events WHERE aggregate_id = $1', [
       transactionId,
     ]);
-    await persistence.hotPool.query('DELETE FROM decisions WHERE transaction_id = $1', [
+    await persistence.coldPool.query('DELETE FROM decisions WHERE transaction_id = $1', [
       transactionId,
     ]);
-    await persistence.hotPool.query('DELETE FROM transactions WHERE transaction_id = $1', [
+    await persistence.coldPool.query('DELETE FROM transactions WHERE transaction_id = $1', [
       transactionId,
     ]);
 

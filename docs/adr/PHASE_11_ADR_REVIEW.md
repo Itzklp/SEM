@@ -72,6 +72,26 @@ is independently confirmed sound by `tests/resilience/bulkhead-isolation
 sized once at the very first phase, before any load-testing evidence existed to
 size it against. Fixed in `.env.example`'s committed default (Phase 9).
 
+**A second, related finding — in the test suite's own code, not the
+architecture — surfaced while re-running the full resilience suite for this
+review.** Five resilience test files (`redis-outage`, `kafka-outage`,
+`overload-shedding`, `postgres-outage`, `dependency-latency`) used `hotPool` —
+the bulkhead's own hot-path pool, with ADR-003's 100ms `statement_timeout` — for
+their own cleanup/assertion queries, not just `coldPool` as `bulkhead-isolation
+.resilience.test.ts` already did correctly. Repeated full-suite runs during this
+review intermittently failed 4-7 of 8 files with `canceling statement due to
+statement timeout` on those cleanup queries — initially, and incorrectly,
+attributed to this laptop's already-documented host-contention variance
+(RISK-001), the default and usually-correct explanation for exactly this kind of
+flakiness in this project. It was not that, this time: switching all five files'
+test-side queries to `coldPool` (matching the pattern Phase 8/9 already
+established elsewhere, just not applied uniformly) took the suite from
+intermittently 4-7/8 failing to a stable 8/8 across three consecutive full runs.
+**Worth recording precisely because the familiar, already-accepted explanation
+was the wrong one this time** — a reminder that RISK-001 is a real, measured
+phenomenon, not a license to stop looking once a plausible-sounding cause
+presents itself.
+
 ## ADR-005 — Per-dependency degradation policy
 
 **The policy itself held up exceptionally well across three phases of adversarial

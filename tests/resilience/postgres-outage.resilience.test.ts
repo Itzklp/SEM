@@ -70,15 +70,15 @@ describe('resilience: PostgreSQL outage fails closed, never crashes, never silen
     });
 
     await redis.del('idem:pg_outage_demo', 'idem:pg_outage_recovery');
-    await persistence.hotPool.query(
+    await persistence.coldPool.query(
       'DELETE FROM outbox_events WHERE aggregate_id = ANY($1::text[])',
       [['pg_outage_demo', 'pg_outage_recovery']],
     );
-    await persistence.hotPool.query(
+    await persistence.coldPool.query(
       'DELETE FROM decisions WHERE transaction_id = ANY($1::text[])',
       [['pg_outage_demo', 'pg_outage_recovery']],
     );
-    await persistence.hotPool.query(
+    await persistence.coldPool.query(
       'DELETE FROM transactions WHERE transaction_id = ANY($1::text[])',
       [['pg_outage_demo', 'pg_outage_recovery']],
     );
@@ -159,7 +159,7 @@ describe('resilience: PostgreSQL outage fails closed, never crashes, never silen
     // never partially wrote anything (the transaction in
     // TransactionRepository.insertScored is all-or-nothing regardless
     // of where in the chain the connection actually failed).
-    const outageRows = await persistence.hotPool.query(
+    const outageRows = await persistence.coldPool.query(
       'SELECT 1 FROM transactions WHERE transaction_id = $1',
       ['pg_outage_demo'],
     );

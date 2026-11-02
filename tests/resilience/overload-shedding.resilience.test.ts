@@ -134,15 +134,15 @@ describe('resilience: overload sheds load above the concurrency ceiling, never p
   it('fires well past the concurrency ceiling at once over real connections: some requests are shed with 429 + Retry-After, none hang, none silently drop', async () => {
     const testTransactionIds = Array.from({ length: 60 }, (_, i) => `overload_${i}`);
     await redis.del(...testTransactionIds.map((id) => `idem:${id}`));
-    await persistence.hotPool.query(
+    await persistence.coldPool.query(
       'DELETE FROM outbox_events WHERE aggregate_id = ANY($1::text[])',
       [testTransactionIds],
     );
-    await persistence.hotPool.query(
+    await persistence.coldPool.query(
       'DELETE FROM decisions WHERE transaction_id = ANY($1::text[])',
       [testTransactionIds],
     );
-    await persistence.hotPool.query(
+    await persistence.coldPool.query(
       'DELETE FROM transactions WHERE transaction_id = ANY($1::text[])',
       [testTransactionIds],
     );
