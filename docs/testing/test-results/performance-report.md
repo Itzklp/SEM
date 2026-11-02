@@ -213,3 +213,33 @@ commit blocks — a secondary, smaller effect, not the main story.
   architectural decision (ADR-006 territory) outside this phase's scope to
   make unilaterally — reported honestly as the next team's starting point,
   not silently worked around.
+
+## 6. Phase 11 regression check
+
+Re-run on 2026-11-02, after Phases 10 (ML provider) and 11 (security fixes,
+dependency updates) landed, `SCORING_PROVIDER=rules` (no ML involved, to isolate
+whether Phase 9's own baseline moved) — `tests/load/score.k6.js` via `pnpm
+test:load`, same methodology as §1.
+
+| Target TPS | Achieved (req/s) | Client p99 (ms) | Server p99 (ms) | Degraded |
+| ---------: | ---------------: | --------------: | --------------: | -------: |
+|         20 |             16.0 |            50.4 |           49.92 |        0 |
+|        100 |             71.5 |         3 023.5 |         4 856.1 |       16 |
+
+**At the sustainable 20 TPS rate: no regression** — p99 50.4/49.92 ms is in the same
+range as the Phase 10 HTTP-comparison baseline measured the same way earlier this
+session (55.5/55.25 ms, §1 of `phase10-ml-evaluation.md`), and well inside this
+phase's own earlier figures. Phases 10 and 11 did not make the hot path slower.
+
+**At 100 TPS — already past this laptop's write-path saturation point (§2b) —
+the numbers are worse than the equivalent Phase 10 run** (3 023/4 856 ms here vs.
+1 239/2 076 ms then, degraded 16 vs. 10). This is **not** attributed to Phase 10/11's
+code changes: the 20 TPS point, which sits below saturation, shows no such
+difference, and §2b's own root cause (Postgres's synchronous-commit path under this
+laptop's WSL2-virtualised disk) is a host-contention-sensitive bottleneck by its own
+analysis — RISK-001, already measured to vary run-to-run on this exact machine
+(Phase 4/5/9's own findings). A saturated-rate number moving between two runs,
+several hours apart, on a shared dev laptop that had been running continuously the
+whole time, is exactly the kind of noise this project's own methodology (§0) warns
+against over-interpreting. Re-confirming the UNSATURATED rate is unchanged is the
+honest regression claim this check can actually make.

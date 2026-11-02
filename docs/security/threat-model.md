@@ -163,23 +163,41 @@ phase, pinning only the specific vulnerable leaf package, never a parent's decla
 range) closed every critical with no code change required, verified by a full
 `pnpm typecheck` + the complete test suite passing before each one was accepted:
 
-| Package           | Was                                                   | Fixed to | Reachable at runtime?                                                                                                         |
-| ----------------- | ----------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `proxy-addr`      | 2.0.7 (IP-spoofing via IPv4-mapped IPv6 trust subnet) | ≥2.0.8   | Yes — `fastify`'s IP resolution, used by both apps                                                                            |
-| `fast-uri`        | 2.4.6/3.1.7 (host confusion)                          | ≥3.1.9   | Yes — Fastify's schema compiler                                                                                               |
-| `handlebars`      | 4.7.9 (JS injection via AST/own-property)             | ≥4.7.10  | **No** — only reachable through `ts-jest`'s own diagnostic formatting, a test-time dev dependency never shipped               |
-| `@fastify/middie` | 8.3.3 (auth bypass in child plugin scopes)            | ≥9.3.2   | **No** — requires registering Express-style `.use()` middleware; confirmed by `grep` that neither app calls `.use()` anywhere |
+| Package      | Was                                                   | Fixed to | Reachable at runtime?                                                                                           |
+| ------------ | ----------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------- |
+| `proxy-addr` | 2.0.7 (IP-spoofing via IPv4-mapped IPv6 trust subnet) | ≥2.0.8   | Yes — `fastify`'s IP resolution, used by both apps                                                              |
+| `fast-uri`   | 2.4.6/3.1.7 (host confusion)                          | ≥3.1.9   | Yes — Fastify's schema compiler                                                                                 |
+| `handlebars` | 4.7.9 (JS injection via AST/own-property)             | ≥4.7.10  | **No** — only reachable through `ts-jest`'s own diagnostic formatting, a test-time dev dependency never shipped |
 
-**First attempt at a blanket `pnpm update -r --no-save` was reverted.** It resolved
-more findings at once but broke `apps/fraud-api/src/swagger.ts`'s typecheck (a
-`FastifyInstance` type-augmentation mismatch between differently-resolved copies of
-`@fastify/swagger`/`@fastify/rate-limit`'s declared types) — caught by this
-project's own "typecheck before accepting" discipline, not shipped. The scoped
-`pnpm.overrides` approach — one named package at a time, typecheck + full suite after
-each — avoided the same breakage while still closing every critical finding.
+**Two attempted fixes were reverted after breaking something `typecheck` alone did
+not catch** — both caught and corrected before being shipped, which is itself the
+point of verifying against the real running system rather than stopping at a clean
+compile:
 
-**After the fix: 2 low, 20 moderate, 20 high, 0 critical.** The remaining findings,
-reviewed rather than ignored:
+1. A blanket `pnpm update -r --no-save` resolved more findings at once but broke
+   `apps/fraud-api/src/swagger.ts`'s **typecheck** (a `FastifyInstance`
+   type-augmentation mismatch between differently-resolved copies of
+   `@fastify/swagger`/`@fastify/rate-limit`'s declared types).
+2. `@fastify/middie` (8.3.3, "auth bypass in child plugin scopes", patched at
+   ≥9.3.2) typechecked cleanly when overridden — but ≥9.3.2 requires Fastify 5.x,
+   and this project runs Fastify 4.28.1 (pinned via `@nestjs/platform-fastify`
+   10.4.22). The break only surfaced at **runtime**, on the very next full
+   resilience-suite run: `FastifyError: fastify-plugin: @fastify/middie - expected
+'5.x' fastify version, '4.28.1' is installed`, failing every single resilience
+   test. Reverted immediately. `@fastify/middie` stays unpatched — it is pulled in
+   by `@nestjs/platform-fastify` itself (not a nested transitive dependency), and
+   its vulnerable code path requires Express-style `.use()` middleware, which
+   neither app registers anywhere (confirmed by `grep`). **Left open and
+   unreachable, not silently fixed in a way that would have taken the whole
+   platform down.**
+
+The scoped `pnpm.overrides` approach — one named package at a time, typecheck AND
+the full test suite (not typecheck alone) run after each — is what caught both of
+these before either reached `main`.
+
+**After the fixes that held: 2 low, 20 moderate, 20 high, 1 critical
+(`@fastify/middie`, reviewed above, unreachable).** The remaining findings, reviewed
+rather than ignored:
 
 - **`drizzle-orm` 0.36.4, SQL injection via improperly escaped SQL **identifiers**
   (not values)**, patched at ≥0.45.2. Checked directly: `grep -rn "sql\.raw\|sql\.
