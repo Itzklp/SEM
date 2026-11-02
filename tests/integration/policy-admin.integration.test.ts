@@ -37,6 +37,14 @@ describe('admin: runtime policy configuration (FR-006)', () => {
     if (redis.status !== 'ready') {
       await new Promise((resolve) => redis.once('ready', resolve));
     }
+    // 'ready' fires before the connection is reliably fast: a command that
+    // lands during the cold-connection ramp-up can exceed REDIS_TIMEOUT_MS,
+    // and ioredis treats a timed-out command as fatal and closes the
+    // socket. A few warmup round trips absorb that ramp-up before the
+    // real assertions run.
+    for (let i = 0; i < 5; i += 1) {
+      await redis.ping();
+    }
 
     const config = loadConfig();
     adminToken = signTestToken({
@@ -57,13 +65,13 @@ describe('admin: runtime policy configuration (FR-006)', () => {
     // identical fix for the failure this produces if skipped.
     const policyAdminTransactionIds = ['policy_admin_demo', 'policy_admin_demo_2'];
     await redis.del(...policyAdminTransactionIds.map((id) => `idem:${id}`));
-    await persistence.hotPool.query('DELETE FROM outbox_events WHERE aggregate_id = ANY($1)', [
+    await persistence.coldPool.query('DELETE FROM outbox_events WHERE aggregate_id = ANY($1)', [
       policyAdminTransactionIds,
     ]);
-    await persistence.hotPool.query('DELETE FROM decisions WHERE transaction_id = ANY($1)', [
+    await persistence.coldPool.query('DELETE FROM decisions WHERE transaction_id = ANY($1)', [
       policyAdminTransactionIds,
     ]);
-    await persistence.hotPool.query('DELETE FROM transactions WHERE transaction_id = ANY($1)', [
+    await persistence.coldPool.query('DELETE FROM transactions WHERE transaction_id = ANY($1)', [
       policyAdminTransactionIds,
     ]);
   });
@@ -191,10 +199,10 @@ describe('admin: runtime policy configuration (FR-006)', () => {
     // left with a tightened policy — PolicyStore's state otherwise
     // outlives this single test.
     await inject('PUT', originalPolicy, adminToken);
-    await persistence.hotPool.query('DELETE FROM decisions WHERE transaction_id = $1', [
+    await persistence.coldPool.query('DELETE FROM decisions WHERE transaction_id = $1', [
       'policy_admin_demo_2',
     ]);
-    await persistence.hotPool.query('DELETE FROM transactions WHERE transaction_id = $1', [
+    await persistence.coldPool.query('DELETE FROM transactions WHERE transaction_id = $1', [
       'policy_admin_demo_2',
     ]);
     await redis.del('idem:policy_admin_demo_2');

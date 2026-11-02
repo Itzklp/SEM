@@ -64,6 +64,15 @@ describe('fraud-api: POST /api/v1/fraud/score (integration)', () => {
     if (redis.status !== 'ready') {
       await new Promise((resolve) => redis.once('ready', resolve));
     }
+    // 'ready' fires before the connection is reliably fast: a command that
+    // lands during the cold-connection ramp-up can exceed REDIS_TIMEOUT_MS,
+    // and ioredis treats a timed-out command as fatal and closes the
+    // socket — so one slow first command made every Redis call in that
+    // test's request fail with "Stream isn't writeable". A few warmup
+    // round trips absorb that ramp-up before the real assertions run.
+    for (let i = 0; i < 5; i += 1) {
+      await redis.ping();
+    }
 
     const config = loadConfig();
     scoreToken = signTestToken({
@@ -128,7 +137,7 @@ describe('fraud-api: POST /api/v1/fraud/score (integration)', () => {
     // Caught live: transitionTransaction()'s return value wasn't being
     // captured, so every persisted row stayed at 'RECEIVED' regardless of
     // how far the pipeline got.
-    const row = await persistence.hotPool.query<{ status: string }>(
+    const row = await persistence.coldPool.query<{ status: string }>(
       'SELECT status FROM transactions WHERE transaction_id = $1',
       [txn.transactionId],
     );
@@ -150,7 +159,7 @@ describe('fraud-api: POST /api/v1/fraud/score (integration)', () => {
     expect(body.error.code).toBe('VALIDATION_ERROR');
     expect(body.error.details?.some((d) => d.field.includes('amount'))).toBe(true);
 
-    const row = await persistence.hotPool.query(
+    const row = await persistence.coldPool.query(
       'SELECT 1 FROM transactions WHERE transaction_id = $1',
       [malformed.transactionId],
     );
@@ -301,6 +310,7 @@ describe('fraud-api: POST /api/v1/fraud/score (integration)', () => {
       if (redis.status !== 'ready') {
         await new Promise((resolve) => redis.once('ready', resolve));
       }
+      await redis.ping();
     }
   });
 

@@ -70,6 +70,14 @@ describe('review-api (integration): case queue, review actions, transaction quer
     if (redis.status !== 'ready') {
       await new Promise((resolve) => redis.once('ready', resolve));
     }
+    // 'ready' fires before the connection is reliably fast: a command that
+    // lands during the cold-connection ramp-up can exceed REDIS_TIMEOUT_MS,
+    // and ioredis treats a timed-out command as fatal and closes the
+    // socket. A few warmup round trips absorb that ramp-up before the
+    // real assertions run.
+    for (let i = 0; i < 5; i += 1) {
+      await redis.ping();
+    }
 
     const config = loadConfig();
     scoreToken = signTestToken({

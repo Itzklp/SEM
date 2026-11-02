@@ -15,7 +15,7 @@ import { PERSISTENCE_CONTEXT } from '../../apps/fraud-api/src/common/persistence
 import { REDIS_CLIENT } from '../../apps/fraud-api/src/common/redis.provider';
 
 /**
- * Phase 5's exit criterion, verbatim (docs/ROADMAP.md): "A demo
+ * Phase 5's exit criterion, verbatim (docs/roadmap.md): "A demo
  * transaction of each class produces ALLOW, REVIEW, BLOCK respectively."
  * Runs the REAL `RuleBasedScoringProvider` through the REAL live app
  * (real Postgres, real Redis) — not a unit test constructing a provider
@@ -42,6 +42,14 @@ describe('demo: ALLOW / REVIEW / BLOCK, one transaction of each class (Phase 5 g
     if (redis.status !== 'ready') {
       await new Promise((resolve) => redis.once('ready', resolve));
     }
+    // 'ready' fires before the connection is reliably fast: a command that
+    // lands during the cold-connection ramp-up can exceed REDIS_TIMEOUT_MS,
+    // and ioredis treats a timed-out command as fatal and closes the
+    // socket. A few warmup round trips absorb that ramp-up before the
+    // real assertions run.
+    for (let i = 0; i < 5; i += 1) {
+      await redis.ping();
+    }
 
     // This file uses fixed, readable transactionIds (a demo script reads
     // better that way) rather than the generator's random ones — which
@@ -63,13 +71,13 @@ describe('demo: ALLOW / REVIEW / BLOCK, one transaction of each class (Phase 5 g
     // turning every demo request into a 500. Caught live, not by
     // inspection — exactly the kind of gap this project's own rule is
     // "say when you find one," not "quietly patch and move on."
-    await persistence.hotPool.query('DELETE FROM outbox_events WHERE aggregate_id = ANY($1)', [
+    await persistence.coldPool.query('DELETE FROM outbox_events WHERE aggregate_id = ANY($1)', [
       demoTransactionIds,
     ]);
-    await persistence.hotPool.query('DELETE FROM decisions WHERE transaction_id = ANY($1)', [
+    await persistence.coldPool.query('DELETE FROM decisions WHERE transaction_id = ANY($1)', [
       demoTransactionIds,
     ]);
-    await persistence.hotPool.query('DELETE FROM transactions WHERE transaction_id = ANY($1)', [
+    await persistence.coldPool.query('DELETE FROM transactions WHERE transaction_id = ANY($1)', [
       demoTransactionIds,
     ]);
     await redis.del(...demoTransactionIds.map((id) => `idem:${id}`));
@@ -225,7 +233,7 @@ describe('demo: ALLOW / REVIEW / BLOCK, one transaction of each class (Phase 5 g
 
     // The persisted row must reflect the same decision — the demo claim
     // is about the whole pipeline, not just the HTTP response shape.
-    const row = await persistence.hotPool.query<{ decision: string }>(
+    const row = await persistence.coldPool.query<{ decision: string }>(
       'SELECT decision FROM decisions WHERE transaction_id = $1',
       [request.transactionId],
     );
