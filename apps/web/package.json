@@ -5,9 +5,10 @@
   "description": "Customer payment-practice sandbox and admin operations dashboard — the browser client for fraud-api and review-api.",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "typecheck": "tsc --noEmit",
+    "build:deps": "pnpm --filter \"@fraudguard/contracts...\" build",
+    "dev": "pnpm build:deps && vite",
+    "build": "pnpm build:deps && tsc --noEmit && vite build",
+    "typecheck": "pnpm build:deps && tsc --noEmit",
     "lint": "eslint .",
     "preview": "vite preview"
   },

@@ -11,13 +11,16 @@ export default defineConfig({
   server: {
     port: 5173,
   },
-  // @fraudguard/contracts compiles to CommonJS (it's shared with the
-  // NestJS backend, which deliberately stays CommonJS — tsconfig.base
-  // .json's own doc comment). Rollup's production build can't statically
-  // see named exports through a workspace-linked CJS package's
-  // `__exportStar` pattern unless told to interop it explicitly; esbuild
-  // (used in dev) already handles this transparently, which is why only
-  // `vite build`, not `vite dev`, needs this.
+  // @fraudguard/contracts compiles to CommonJS (shared with the NestJS
+  // backend, which deliberately stays CommonJS — tsconfig.base.json's own
+  // doc comment). Rollup's production build can't statically see named
+  // exports through a workspace-linked CJS package's `__exportStar`
+  // pattern unless told to interop it explicitly; esbuild (used in dev)
+  // already handles this transparently. (Resolving straight to TS source
+  // instead was tried and reverted — contracts' Kafka event-id helper
+  // imports node:crypto, which Rollup refuses to bind against even for an
+  // unreachable branch when it sees real source; dist's compiled
+  // `require("crypto")` is lenient about it since it's never called.)
   optimizeDeps: {
     include: ['@fraudguard/contracts'],
   },
