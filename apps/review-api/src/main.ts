@@ -43,7 +43,7 @@ async function bootstrap(): Promise<void> {
   );
 
   app.useGlobalFilters(new HttpExceptionFilter(bootstrapLogger));
-  app.enableCors({ origin: false });
+  app.enableCors({ origin: config.security.webAppOrigin }); // apps/web is the one browser client allowed to call this directly
 
   // Same reasoning as fraud-api's main.ts: unauthenticated, outside Nest's
   // module graph — Prometheus is the caller, not an authenticated analyst.

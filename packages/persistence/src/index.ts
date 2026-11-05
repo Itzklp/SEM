@@ -7,3 +7,5 @@ export * from './repositories/case-repository';
 export * from './repositories/audit-repository';
 export * from './repositories/model-training-repository';
 export * from './repositories/model-registry-repository';
+export * from './repositories/user-repository';
+export * from './repositories/test-run-repository';

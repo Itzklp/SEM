@@ -130,6 +130,7 @@ export const rawEnvSchema = z.object({
   AUTH_JWT_ISSUER: z.string().min(1).default('fraudguard'),
   AUTH_JWT_AUDIENCE: z.string().min(1).default('fraudguard-api'),
   AUTH_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+  WEB_APP_ORIGIN: z.string().min(1).default('http://localhost:5173'),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(1000),
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(100),
   MAX_CONCURRENT_REQUESTS: z.coerce.number().int().positive().default(500),

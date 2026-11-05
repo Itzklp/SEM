@@ -5,6 +5,9 @@ export * from './dto/transaction.dto';
 export * from './dto/case.dto';
 export * from './dto/model.dto';
 export * from './dto/policy.dto';
+export * from './dto/auth.dto';
+export * from './dto/test-run.dto';
+export * from './dto/system-health.dto';
 
 export * from './events/envelope';
 export * from './events/event-id';

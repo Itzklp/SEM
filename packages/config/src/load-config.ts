@@ -115,6 +115,8 @@ export interface AppConfig {
     };
     readonly rateLimit: { readonly windowMs: number; readonly maxRequests: number };
     readonly maxConcurrentRequests: number;
+    /** The one browser origin allowed to call this API directly (apps/web) — see main.ts's enableCors(). */
+    readonly webAppOrigin: string;
   };
 
   readonly observability: {
@@ -230,6 +232,7 @@ function toAppConfig(env: RawEnv): AppConfig {
       },
       rateLimit: { windowMs: env.RATE_LIMIT_WINDOW_MS, maxRequests: env.RATE_LIMIT_MAX_REQUESTS },
       maxConcurrentRequests: env.MAX_CONCURRENT_REQUESTS,
+      webAppOrigin: env.WEB_APP_ORIGIN,
     },
     observability: {
       metricsEnabled: env.METRICS_ENABLED,

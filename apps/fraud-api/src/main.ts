@@ -6,6 +6,7 @@ import 'reflect-metadata';
 
 import rateLimit from '@fastify/rate-limit';
 import { loadConfig } from '@fraudguard/config';
+import { setMerchantRiskScore } from '@fraudguard/feature-store';
 import {
   getPreloadedTracingHandle,
   registerDefaultMetrics,
@@ -14,12 +15,23 @@ import {
 } from '@fraudguard/observability';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import type { Redis } from 'ioredis';
 import pino from 'pino';
 
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 import { registerLoadShedding } from './common/load-shedding';
+import { REDIS_CLIENT } from './common/redis.provider';
 import { registerSwagger } from './swagger';
+
+/**
+ * Real merchant/IP risk seeding is still an open Phase 5 item
+ * (risk-lookup.ts's doc comment) — until then, apps/web's "simulate a
+ * suspicious payment" preset needs at least one merchant it can rely on
+ * actually being risky. Idempotent (plain SET), cheap, safe to redo on
+ * every boot.
+ */
+export const DEMO_HIGH_RISK_MERCHANT_ID = 'merchant_demo_high_risk';
 
 /**
  * Fail Fast: loadConfig() runs before Nest even starts building the DI
@@ -50,7 +62,7 @@ async function bootstrap(): Promise<void> {
   });
 
   app.useGlobalFilters(new HttpExceptionFilter(bootstrapLogger));
-  app.enableCors({ origin: false }); // no browser client exists yet; explicit opt-in later rather than an open default
+  app.enableCors({ origin: config.security.webAppOrigin }); // apps/web is the one browser client allowed to call this directly
 
   // Registered on the raw Fastify instance, not via app.register(), so these
   // hooks apply outside Nest's own route encapsulation. /metrics has no
@@ -68,6 +80,23 @@ async function bootstrap(): Promise<void> {
 
   await app.listen(config.ports.fraudApi, '0.0.0.0');
   bootstrapLogger.info({ port: config.ports.fraudApi }, 'fraud-api listening');
+
+  // Best-effort: the demo merchant seed must never be able to take the
+  // whole service down. The Redis client connects asynchronously, so
+  // 'ready' isn't guaranteed yet the instant app.listen() resolves.
+  try {
+    const redis = app.get<Redis>(REDIS_CLIENT);
+    if (redis.status !== 'ready') {
+      await new Promise<void>((resolve) => {
+        redis.once('ready', () => {
+          resolve();
+        });
+      });
+    }
+    await setMerchantRiskScore(redis, DEMO_HIGH_RISK_MERCHANT_ID, 0.95);
+  } catch (error) {
+    bootstrapLogger.warn({ error }, 'could not seed the demo high-risk merchant — apps/web’s "suspicious payment" preset will read as neutral until this succeeds');
+  }
 
   const shutdown = (signal: string): void => {
     bootstrapLogger.info({ signal }, 'fraud-api shutting down');

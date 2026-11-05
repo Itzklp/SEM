@@ -188,6 +188,10 @@ pnpm db:migrate
 pnpm dev
 ```
 
+`pnpm dev` also starts `apps/web` — open http://localhost:5173 and sign in with
+`customer@fraudguard.dev` / `admin@fraudguard.dev` (password `fraudguard-demo` for both) to
+practice a payment or open the admin dashboard. See [apps/web/README.md](apps/web/README.md).
+
 Full instructions and the command reference: [docs/setup.md](docs/setup.md).
 
 ---

@@ -4,6 +4,8 @@ import {
   createPersistenceContext,
   TransactionRepository,
   ModelRegistryRepository,
+  UserRepository,
+  TestRunRepository,
   type PersistenceContext,
 } from '@fraudguard/persistence';
 import type { Provider } from '@nestjs/common';
@@ -14,6 +16,8 @@ export const PERSISTENCE_CONTEXT = Symbol('PERSISTENCE_CONTEXT');
 export const CASE_REPOSITORY = Symbol('CASE_REPOSITORY');
 export const TRANSACTION_REPOSITORY = Symbol('TRANSACTION_REPOSITORY');
 export const MODEL_REGISTRY_REPOSITORY = Symbol('MODEL_REGISTRY_REPOSITORY');
+export const USER_REPOSITORY = Symbol('USER_REPOSITORY');
+export const TEST_RUN_REPOSITORY = Symbol('TEST_RUN_REPOSITORY');
 
 /**
  * `coldDb` only — review-api is exactly the "cold path" `createPools`'s
@@ -43,5 +47,15 @@ export const persistenceProviders: Provider[] = [
     inject: [PERSISTENCE_CONTEXT],
     useFactory: (ctx: PersistenceContext): ModelRegistryRepository =>
       new ModelRegistryRepository(ctx.coldDb),
+  },
+  {
+    provide: USER_REPOSITORY,
+    inject: [PERSISTENCE_CONTEXT],
+    useFactory: (ctx: PersistenceContext): UserRepository => new UserRepository(ctx.coldDb),
+  },
+  {
+    provide: TEST_RUN_REPOSITORY,
+    inject: [PERSISTENCE_CONTEXT],
+    useFactory: (ctx: PersistenceContext): TestRunRepository => new TestRunRepository(ctx.coldDb),
   },
 ];

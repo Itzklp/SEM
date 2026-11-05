@@ -8,6 +8,8 @@ import {
   PERSISTENCE_CONTEXT,
   TRANSACTION_REPOSITORY,
   MODEL_REGISTRY_REPOSITORY,
+  USER_REPOSITORY,
+  TEST_RUN_REPOSITORY,
 } from './persistence.provider';
 
 @Global()
@@ -20,6 +22,8 @@ import {
     CASE_REPOSITORY,
     TRANSACTION_REPOSITORY,
     MODEL_REGISTRY_REPOSITORY,
+    USER_REPOSITORY,
+    TEST_RUN_REPOSITORY,
   ],
 })
 export class CommonModule {}

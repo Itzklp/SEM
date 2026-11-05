@@ -12,6 +12,11 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/.turbo/**',
       'ml/**',
+      // Browser/JSX code with its own rule set (react-hooks, jsx-a11y) and
+      // its own tsconfig (DOM lib, bundler resolution) — same reasoning as
+      // ml/ above: different enough tooling to warrant its own config
+      // rather than bending this one to fit both. See apps/web/eslint.config.mjs.
+      'apps/web/**',
       '**/*.js',
       '**/*.mjs',
     ],
