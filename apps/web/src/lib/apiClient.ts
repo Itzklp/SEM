@@ -1,8 +1,14 @@
 import { getStoredToken } from './authStorage';
 
+// Fall back to the same defaults the backend apps themselves listen on
+// (packages/config's own FRAUD_API_PORT/REVIEW_API_PORT defaults) so this
+// works out of the box without requiring a .env.local first — without
+// these, a missing env var silently becomes the string "undefined" in the
+// fetch URL below, which the browser then resolves as a path on Vite's
+// own dev server instead of the real API, and fails with a confusing 404.
 const SERVICE_BASE_URLS = {
-  'fraud-api': import.meta.env.VITE_FRAUD_API_URL,
-  'review-api': import.meta.env.VITE_REVIEW_API_URL,
+  'fraud-api': import.meta.env.VITE_FRAUD_API_URL || 'http://localhost:3000',
+  'review-api': import.meta.env.VITE_REVIEW_API_URL || 'http://localhost:3001',
 } as const;
 
 type ServiceName = keyof typeof SERVICE_BASE_URLS;
