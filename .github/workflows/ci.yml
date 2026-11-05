@@ -49,6 +49,12 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # apps/web has its own ESLint/tsconfig (browser globals, JSX, DOM lib)
+      # and is deliberately excluded from the two steps above — same
+      # reasoning as ml/ being outside the Node tooling entirely.
+      - name: Lint and typecheck apps/web
+        run: pnpm --filter @fraudguard/web lint && pnpm --filter @fraudguard/web typecheck
+
       # packages/domain is I/O-free (ADR-004), so the unit suite needs nothing
       # running. If this step ever requires a service, an architectural rule
       # has been broken.
