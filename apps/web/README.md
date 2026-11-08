@@ -22,10 +22,10 @@ don't match your setup.
 Two accounts are seeded by migration `0005_users_and_test_runs.sql`, password
 `fraudguard-demo` for both:
 
-| Email                     | Role     | Can do                                             |
-| -------------------------- | -------- | --------------------------------------------------- |
-| `customer@fraudguard.dev`  | customer | Practice a payment                                   |
-| `admin@fraudguard.dev`     | admin    | Practice a payment, view system health, run test suites |
+| Email                     | Role     | Can do                                                  |
+| ------------------------- | -------- | ------------------------------------------------------- |
+| `customer@fraudguard.dev` | customer | Practice a payment                                      |
+| `admin@fraudguard.dev`    | admin    | Practice a payment, view system health, run test suites |
 
 ## What's actually real here
 

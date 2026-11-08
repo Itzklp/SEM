@@ -95,7 +95,10 @@ async function bootstrap(): Promise<void> {
     }
     await setMerchantRiskScore(redis, DEMO_HIGH_RISK_MERCHANT_ID, 0.95);
   } catch (error) {
-    bootstrapLogger.warn({ error }, 'could not seed the demo high-risk merchant — apps/web’s "suspicious payment" preset will read as neutral until this succeeds');
+    bootstrapLogger.warn(
+      { error },
+      'could not seed the demo high-risk merchant — apps/web’s "suspicious payment" preset will read as neutral until this succeeds',
+    );
   }
 
   const shutdown = (signal: string): void => {
