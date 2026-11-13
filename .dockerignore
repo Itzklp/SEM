@@ -1,0 +1,24 @@
+# Keeps the build context (docker-compose.yml's ml-service uses the repo
+# root, since app/main.py and app/train.py locate ml/ relative to it) from
+# dragging every node_modules, test artefact, and doc into the build.
+node_modules
+**/node_modules
+.git
+.turbo
+coverage
+dist
+**/dist
+*.tsbuildinfo
+docs
+tests
+infrastructure
+.env
+.env.*
+!.env.example
+CREDENTIALS.md
+*.log
+ml/models
+ml/datasets
+.venv
+__pycache__
+**/__pycache__

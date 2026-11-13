@@ -5,7 +5,8 @@
 #
 #   core         PostgreSQL, Redis, Kafka (KRaft) — everyday development
 #   observability + Prometheus, Grafana — when working on metrics/dashboards or load testing
-#   apps         + fraud-api, event-worker, review-api — full containerised stack (Phase 3+)
+#   apps         + ml-service — fraud-api/event-worker/review-api stay host-run (pnpm dev);
+#                  ml-service is the one deployable that's actually containerised here
 #
 # Usage: see package.json's docker:up / docker:up:obs / docker:up:all / docker:down.
 # Full rationale: docs/setup.md §4.
@@ -187,12 +188,15 @@ services:
     profiles: [observability]
     networks: [fraudguard]
     # fraud-api/review-api/event-worker run on the HOST (`pnpm dev`), not
-    # as containers — the same "apps profile is empty by design" fact
-    # Phase 3/6 already documented. `prometheus.yml`'s targets for them
-    # are therefore `host.docker.internal:<port>`, not a container name —
-    # Docker Desktop resolves this natively; `extra_hosts` below is the
-    # Linux-without-Docker-Desktop equivalent (`host-gateway`), harmless
-    # and ignored where Docker Desktop already provides it.
+    # as containers — they're Node, and pnpm already manages them. ml-service
+    # (apps profile, below) is the one exception: it's Python, outside the
+    # pnpm workspace by design, so it gets its own container instead.
+    # `prometheus.yml`'s targets for all four are `host.docker.internal:<port>`
+    # either way — a published container port looks the same to Prometheus
+    # as a host-run one. Docker Desktop resolves `host.docker.internal`
+    # natively; `extra_hosts` below is the Linux-without-Docker-Desktop
+    # equivalent (`host-gateway`), harmless and ignored where Docker Desktop
+    # already provides it.
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -278,7 +282,35 @@ services:
     logging: *default-logging
 
   # ===========================================================================
-  # APPS profile — populated from Phase 3 onward. Intentionally empty now:
-  # an empty profile is valid Compose and a no-op, which is preferable to a
-  # placeholder service that would need to be remembered and removed later.
+  # APPS profile — ml-service only. fraud-api/event-worker/review-api are
+  # Node and stay host-run via `pnpm dev`; ml-service is Python, outside the
+  # pnpm workspace by design (pnpm-workspace.yaml), so it needs its own image
+  # rather than a workspace script.
   # ===========================================================================
+
+  ml-service:
+    build:
+      context: .
+      dockerfile: apps/ml-service/Dockerfile
+    profiles: [apps]
+    networks: [fraudguard]
+    # No MODEL_DIR override: main.py's own default (parents[3]/ml/models)
+    # already resolves to /app/ml/models from this image's layout.
+    ports:
+      - "${ML_SERVICE_PORT:-8000}:8000"
+    volumes:
+      # Bind mount, not a named volume: a model trained in the container
+      # lands at the same ./ml/models the host-run `pnpm ml:train` writes
+      # to, so either path produces an artifact the other can pick up.
+      - ./ml:/app/ml
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      # First boot trains a model (docker-entrypoint.sh) before serving —
+      # train.py's own 100,000-row default takes longer than every other
+      # service's start_period here.
+      start_period: 90s
+    mem_limit: 512m
+    logging: *default-logging
