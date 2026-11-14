@@ -71,7 +71,17 @@ describe('demo: ALLOW / REVIEW / BLOCK, one transaction of each class (Phase 5 g
     // turning every demo request into a 500. Caught live, not by
     // inspection — exactly the kind of gap this project's own rule is
     // "say when you find one," not "quietly patch and move on."
+    //
+    // fraud_cases too (same migration as outbox_events, same gap): the
+    // REVIEW/BLOCK scenarios' decisions get picked up by event-worker's
+    // case-creation consumer on a prior run, leaving a fraud_cases row
+    // whose FK (`fraud_cases_transaction_id_fkey`) then blocks deleting
+    // the transaction on the next local rerun. Deleted before
+    // `transactions`, for the same reason `decisions` is.
     await persistence.coldPool.query('DELETE FROM outbox_events WHERE aggregate_id = ANY($1)', [
+      demoTransactionIds,
+    ]);
+    await persistence.coldPool.query('DELETE FROM fraud_cases WHERE transaction_id = ANY($1)', [
       demoTransactionIds,
     ]);
     await persistence.coldPool.query('DELETE FROM decisions WHERE transaction_id = ANY($1)', [

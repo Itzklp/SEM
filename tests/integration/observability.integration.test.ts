@@ -209,38 +209,22 @@ describe('observability (integration): real metrics and real end-to-end trace pr
     const transactionId = `obs_trace_${Date.now()}`;
     const txn = buildRequest({ transactionId, userId: 'obs_trace_user' });
 
-    const originalTraceId = await tracer.startActiveSpan('test.original-request', async (span) => {
-      const traceId = span.spanContext().traceId;
-      const response = await inject(txn);
-      expect(response.statusCode).toBe(200);
-      span.end();
-      return traceId;
-    });
-
-    const rows = await persistence.coldPool.query<{ trace_context: string | null }>(
-      'SELECT trace_context FROM outbox_events WHERE aggregate_id = $1',
-      [txn.transactionId],
-    );
-    expect(rows.rows.length).toBe(2);
-    for (const row of rows.rows) {
-      expect(row.trace_context).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/);
-      // The captured traceparent's own trace id segment IS the id the
-      // original span reported — not just "some" well-formed value.
-      expect(row.trace_context?.split('-')[1]).toBe(originalTraceId);
-    }
-
-    // Real consume, real broker — subscribed BEFORE publishing, reading
-    // only NEW messages (fromBeginning: false), not the DB column. CAUGHT
-    // LIVE: this test originally published first and started a FRESH
-    // `fromBeginning: true` consumer afterward — correct in isolation,
-    // but `transaction.decided` accumulates messages across every other
-    // integration/resilience test run in a long session, and scanning
-    // the whole topic from the start eventually exceeded this test's own
-    // 15s wait. Subscribing first and waiting for the group to actually
-    // reach `Stable` (not just "subscribe() resolved" — the same gap
-    // `tests/resilience/malformed-message.resilience.test.ts` found)
-    // means the publish below is only ever read as a brand-new message,
-    // regardless of how large the topic has grown.
+    // Consumer subscribed and the group confirmed `Stable` BEFORE the
+    // transaction is even scored — not just before this test's own
+    // manual relay call below. CAUGHT LIVE: a real `event-worker`
+    // process (`pnpm dev`, running alongside the test suite the way any
+    // local dev session normally has it) polls and relays the outbox on
+    // its own schedule, independent of this test. It routinely won that
+    // race — publishing the row within milliseconds of the decision
+    // being persisted, well before a freshly-created consumer group
+    // finishes its multi-second join/sync handshake (measured: ~3s on
+    // this hardware) — so the message was already gone from the topic's
+    // "new" end by the time this test's consumer became `Stable`, and
+    // the manual relay call below correctly found nothing left to
+    // publish (`publishedCount: 0`), which used to be misread as "the
+    // message never arrived" rather than "something else already sent
+    // it." Subscribing before the request is injected makes this test's
+    // consumer ready no matter which of the two relay paths wins.
     const config = loadConfig();
     const kafka = createKafkaClient(config);
     const admin: Admin = kafka.admin();
@@ -289,8 +273,34 @@ describe('observability (integration): real metrics and real end-to-end trace pr
     await admin.disconnect();
     expect(stable).toBe(true);
 
-    // Real publish, real broker — only now, once the consumer is
-    // genuinely ready to receive it.
+    // Only now — with the consumer already a stable group member — is
+    // the transaction actually scored and persisted.
+    const originalTraceId = await tracer.startActiveSpan('test.original-request', async (span) => {
+      const traceId = span.spanContext().traceId;
+      const response = await inject(txn);
+      expect(response.statusCode).toBe(200);
+      span.end();
+      return traceId;
+    });
+
+    const rows = await persistence.coldPool.query<{ trace_context: string | null }>(
+      'SELECT trace_context FROM outbox_events WHERE aggregate_id = $1',
+      [txn.transactionId],
+    );
+    expect(rows.rows.length).toBe(2);
+    for (const row of rows.rows) {
+      expect(row.trace_context).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/);
+      // The captured traceparent's own trace id segment IS the id the
+      // original span reported — not just "some" well-formed value.
+      expect(row.trace_context?.split('-')[1]).toBe(originalTraceId);
+    }
+
+    // A manual relay call too, not just the real event-worker's own poll
+    // loop — belt and suspenders so this test doesn't depend on that
+    // loop's poll interval. Whichever of the two actually publishes the
+    // row, `failedCount` must still be zero; `publishedCount` can
+    // legitimately be 0 here if the real event-worker already won the
+    // race (see the comment above) — that is not a failure.
     const producer = createProducer(kafka);
     await producer.connect();
     const relayResult = await runOutboxRelayOnce({
